@@ -3,6 +3,7 @@ number:5 "name":bruh, values{1,2
 ,3.456 7
 	}
 	text"oh\tm\x41i \ngoodness"
-	things{a:1,b:2}
+	th*{a:1,b:2}
 	version 2
+	d* T*
 }

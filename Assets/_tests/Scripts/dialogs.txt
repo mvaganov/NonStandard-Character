@@ -1,0 +1,28 @@
+[
+{
+	name = "welcome",
+	options = [
+		{
+			=Dialog+Text
+			text = "Welcome to the NonStandard game"
+		}, {
+			=Dialog+Choice
+			text = "Hi. See ya around."
+			command = "done"
+		}, {
+			=Dialog+Choice
+			text = "what is this place?"
+			command = "dialog what"
+		}
+	]
+}, {
+	name = what
+	options [
+		{ =Text   text "a testing area for NonStandard code" }
+		{ =Choice text "oh ok"            command "done" },
+		{ =Choice text "more info please" command "dialog moreinfo" }
+	]
+},
+// a lot of structural syntax is optional, and the wildcard character '*' can be used if enough identifying text is given
+{n* moreinfo o*[{=T* t*"no more info."}{=C* t* okthxbye c* done}{=C* t*"please?"c*"dialog welcome"}]}
+]

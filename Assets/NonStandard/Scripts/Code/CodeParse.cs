@@ -294,7 +294,7 @@ namespace NonStandard.Code {
 		public static Delim[] StandardDelimiters = CombineDelims(_string_delimiter, _char_delimiter,
 			_expression_delimiter, _code_body_delimiter, _square_brace_delimiter, _ternary_operator_delimiter,
 			_instruction_finished_delimiter, _list_item_delimiter, _membership_operator, _prefix_unary_operator,
-			_binary_operator, _binary_logic_operatpor, _assignment_operator, _lambda_operator, _math_operator,
+			_binary_operator, _binary_logic_operatpor, _assignment_operator, _lambda_operator, //_math_operator,
 			_block_comment_delimiter, _line_comment_delimiter, _number);
 		public static Delim[] LineCommentDelimiters = CombineDelims(_line_comment_continuation, _end_of_line_comment);
 		public static Delim[] XmlCommentDelimiters = CombineDelims(_line_comment_continuation,
