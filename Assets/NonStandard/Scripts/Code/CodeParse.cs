@@ -60,6 +60,9 @@ namespace NonStandard.Code {
 		}
 		public ParseResult AddToLength(int count) { lengthParsed += count; error.col += count; return this; }
 		public ParseResult ForceCharSubstitute() { replacementValue = Convert.ToChar(replacementValue); return this; }
+		public ParseResult SetError(string errorMessage, int row=0, int col=0) {
+			error = new CodeConvert.Err(row, col, errorMessage); return this;
+		}
 	}
 	public class TokenSubstitution {
 		public string orig; public object value;
@@ -151,9 +154,7 @@ namespace NonStandard.Code {
 				int frac = onesPlace + 2;
 				while (frac + numFractionDigits < str.Length &&
 					IsValidNumber(str[frac + numFractionDigits], numberBase)) { numFractionDigits++; }
-				if (numFractionDigits == 0) {
-					pr.error = new CodeConvert.Err(0, index, "decimal point with no subsequent digits");
-				}
+				if (numFractionDigits == 0) { pr.SetError("decimal point with no subsequent digits", 0, index); }
 				b = numberBase;
 				for (int i = 0; i < numFractionDigits; ++i) {
 					fraction += NumericValue(str[frac + i]) / (double)b;
@@ -164,25 +165,13 @@ namespace NonStandard.Code {
 			}
 			return pr;
 		}
-		public static ParseResult CommentEscape(string str, int index) {
-			return UnescapeString(str, index);
-		}
+		public static ParseResult CommentEscape(string str, int index) { return UnescapeString(str, index); }
 
-		// TODO make the method signature include an error list
 		public static ParseResult UnescapeString(string str, int index) {
 			ParseResult r = new ParseResult(0, null); // by default, nothing happened
-			if (str.Length <= index) {
-				r.error = new CodeConvert.Err(0, 0, "invalid arguments");
-				return r;
-			}
-			if (str[index] != '\\') {
-				r.error = new CodeConvert.Err(0, 0, "expected escape sequence starting with '\\'");
-				return r;
-			}
-			if (str.Length <= index + 1) {
-				r.error = new CodeConvert.Err(0, 1, "unable to parse escape sequence at end of string");
-				return r;
-			}
+			if (str.Length <= index) { return r.SetError("invalid arguments"); }
+			if (str[index] != '\\') { return r.SetError("expected escape sequence starting with '\\'"); }
+			if (str.Length <= index + 1) { return r.SetError("unable to parse escape sequence at end of string", 0,1); }
 			char c = str[index + 1];
 			switch (c) {
 			case '\n': return new ParseResult(index + 2, "");
@@ -217,8 +206,7 @@ namespace NonStandard.Code {
 				return NumberParse(str, index + 1, digitCount, 8, false).AddToLength(1);
 			}
 			}
-			r.error = new CodeConvert.Err(0, 1, "unknown escape sequence");
-			return r;
+			return r.SetError("unknown escape sequence", 0,1);
 		}
 
 		private static void GiveDesc(Delim[] delims, string desc) {

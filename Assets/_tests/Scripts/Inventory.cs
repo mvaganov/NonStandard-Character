@@ -4,9 +4,9 @@ using UnityEngine;
 public class Inventory : MonoBehaviour {
 
 	public List<GameObject> items;
-	public InventoryUI inventoryUi;
+	public ListUi inventoryUi;
 
-	public InventoryItemUI AddItem(GameObject itemObject) {
+	public ListItemUi AddItem(GameObject itemObject) {
 		items.Add(itemObject);
 		itemObject.SetActive(false);
 		itemObject.transform.SetParent(transform);

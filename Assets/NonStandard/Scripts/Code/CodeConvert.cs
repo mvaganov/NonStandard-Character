@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Text;
 
@@ -478,7 +477,6 @@ namespace NonStandard.Code {
 		/// </summary>
 		/// <param name="str"></param>
 		/// <returns></returns>
-		// TODO use the actual parsing mechanisms...
 		public static string Unescape(string str) {
 			ParseResult parse;
 			StringBuilder sb = new StringBuilder();
@@ -488,14 +486,7 @@ namespace NonStandard.Code {
 				if (c == '\\') {
 					sb.Append(str.Substring(stringStarted, i - stringStarted));
 					parse = Delim.UnescapeString(str, i);
-					//if (parse.IsError) {
-					//	Console.ForegroundColor = ConsoleColor.Red;
-					//	Console.WriteLine("@" + i + ": " + parse.error);
-					//}
-					if (parse.replacementValue != null) {
-						sb.Append(parse.replacementValue);
-					}
-					//Console.WriteLine("replacing " + str.Substring(i, parse.lengthParsed) + " with " + parse.replacementValue);
+					if (parse.replacementValue != null) { sb.Append(parse.replacementValue); }
 					stringStarted = i + parse.lengthParsed;
 					i = stringStarted - 1;
 				}
@@ -504,7 +495,6 @@ namespace NonStandard.Code {
 			return sb.ToString();
 		}
 
-		// TODO use the actual parsing mechanisms...
 		public static string Escape(string str) {
 			StringBuilder sb = new StringBuilder();
 			for (int i = 0; i < str.Length; ++i) {
