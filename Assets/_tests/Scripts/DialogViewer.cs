@@ -3,16 +3,12 @@ using UnityEngine;
 using NonStandard.Code;
 using System;
 
-[System.Serializable] public class Dialog {
+[Serializable] public class Dialog {
 	public string name;
-
 	public DialogOption[] options;
-	public abstract class DialogOption {
-		public TextAnchor anchorText = TextAnchor.UpperLeft;
-	}
-
-	[System.Serializable] public class Text : DialogOption { public string text; }
-	[System.Serializable] public class Choice : DialogOption { public string text, command; }
+	public abstract class DialogOption { public string text; public TextAnchor anchorText = TextAnchor.UpperLeft; }
+	[Serializable] public class Text : DialogOption { }
+	[Serializable] public class Choice : DialogOption { public string command; }
 }
 
 public class DialogViewer : MonoBehaviour {
@@ -31,31 +27,28 @@ public class DialogViewer : MonoBehaviour {
 		Destroy(prefab_textUi.GetComponent<UnityEngine.UI.Button>());
 		Destroy(prefab_textUi.GetComponent<UnityEngine.UI.Image>());
 	}
-	private void InitializeCommands() {
-		commandListing["done"] = Done;
-		commandListing["dialog"] = SetDialog;
-		commandListing["start"] = StartDialog;
-		commandListing["hide"] = Hide;
-		commandListing["show"] = Show;
-	}
 	public ListItemUi AddDialogOption(Dialog.DialogOption option) {
 		ListItemUi li = null;
-		Dialog.Text t = option as Dialog.Text;
-		if (t != null) {
-			li = listUi.AddItem(option, t.text, null, prefab_textUi);
-		}
-		if (li == null) {
+		do {
+			Dialog.Text t = option as Dialog.Text;
+			if (t != null) {
+				li = listUi.AddItem(option, t.text, null, prefab_textUi);
+				break;
+			}
 			Dialog.Choice c = option as Dialog.Choice;
 			if (c != null) {
 				li = listUi.AddItem(option, c.text, () => ParseCommand(c.command), prefab_buttonUi);
 				currentChoices.Add(li);
+				break;
 			}
 		}
-		li.text.alignment = option.anchorText;
+		while (false);
+		if (li != null) {
+			li.text.alignment = option.anchorText;
+		}
 		return li;
 	}
 	public void ShowCloseDialogButton() {
-		Debug.Log(closeDialogButton);
 		if (closeDialogButton != null) { Destroy(closeDialogButton.gameObject); }
 		closeDialogButton = AddDialogOption(new Dialog.Choice { 
 			text = "\n<close dialog>\n", command = "hide", anchorText = TextAnchor.MiddleCenter });
@@ -111,13 +104,16 @@ public class DialogViewer : MonoBehaviour {
 			commandToExecute.Invoke(nextCommand);
 		}
 	}
-	public void SetDialog(string name) {
-		SetDialog(Array.Find(dialogs.ToArray(), d => d.name == name), false);
+	private void InitializeCommands() {
+		commandListing["dialog"] = SetDialog;
+		commandListing["start"] = StartDialog;
+		commandListing["done"] = Done;
+		commandListing["hide"] = Hide;
+		commandListing["show"] = Show;
 	}
-	public void StartDialog(string name) {
-		SetDialog(Array.Find(dialogs.ToArray(), d => d.name == name), true);
-	}
+	public void SetDialog(string name) { SetDialog(Array.Find(dialogs.ToArray(), d => d.name == name), false); }
+	public void StartDialog(string name) { SetDialog(Array.Find(dialogs.ToArray(), d => d.name == name), true); }
 	public void Done(string _) { DeactivateDialogChoices(); ShowCloseDialogButton(); }
-	public void Show(string _) { gameObject.SetActive(true); }
 	public void Hide(string _) { gameObject.SetActive(false); }
+	public void Show(string _) { gameObject.SetActive(true); }
 }
