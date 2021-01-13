@@ -12,24 +12,32 @@ namespace NonStandard.TouchGui {
 			base.Start();
 			rectTransform = GetComponent<RectTransform>();
 			// TODO get the UI system working with these events, and see if mobile still works.
-			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.PointerDown, OnPointerDown);
-			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.Drag, OnPointerDrag);
-			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.PointerUp, OnPointerUp);
+			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.PointerDown, PointerDown);
+			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.Drag, PointerDrag);
+			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.PointerUp, PointerUp);
 		}
-		public void OnPointerDown(UnityEngine.EventSystems.BaseEventData data) {
+		public override void PointerDown(UnityEngine.EventSystems.BaseEventData data) {
+			UnityEngine.EventSystems.PointerEventData pd = data as UnityEngine.EventSystems.PointerEventData;
+			PressDown(pd.position);
 			//Debug.Log("down");
 		}
-		public void OnPointerDrag(UnityEngine.EventSystems.BaseEventData data) { 
+		public override void PointerDrag(UnityEngine.EventSystems.BaseEventData data) {
+			UnityEngine.EventSystems.PointerEventData pd = data as UnityEngine.EventSystems.PointerEventData;
+			Hold(pd.position);
 			//Debug.Log("drag");
 		}
-		public void OnPointerUp(UnityEngine.EventSystems.BaseEventData data) {
+		public override void PointerUp(UnityEngine.EventSystems.BaseEventData data) {
+			UnityEngine.EventSystems.PointerEventData pd = data as UnityEngine.EventSystems.PointerEventData;
+			Release(pd.position, null);
 			//Debug.Log("release");
 		}
 
 		public override bool PressDown(TouchCollider tc) { return PressDown(tc.touch.position); }
 		public bool PressDown(Vector2 position) {
 			if (Dragged) { Debug.Log("ignored touch before drag finished"); return false; }
-			fingerId = triggeringCollider.touch.fingerId;
+			if (triggeringCollider != null) {
+				fingerId = triggeringCollider.touch.fingerId;
+			} else { fingerId = -1; }
 			Dragged = true;
 			delta = (Vector2)rectTransform.position - position;//triggeringCollider.touch.position;
 			return base.PressDown(null);
@@ -38,6 +46,7 @@ namespace NonStandard.TouchGui {
 		public void FollowDrag() {
 			if (surpressDragFollow) return;
 			TouchCollider tc = TouchGuiSystem.Instance().GetTouch(fingerId);
+			if (tc == null) return;
 			FollowDragInternal(tc.touch.position);
 		}
 		public void FollowDragInternal(Vector2 position) {
@@ -52,7 +61,10 @@ namespace NonStandard.TouchGui {
 		}
 
 		public override bool Release(TouchCollider tc) {
-			FollowDragInternal(tc.touch.position);
+			return Release(tc.touch.position, tc);
+		}
+		public bool Release(Vector2 position, TouchCollider tc) {
+			FollowDragInternal(position);
 			if (tc == null || tc.touch.phase == TouchPhase.Ended || tc.touch.phase == TouchPhase.Canceled) {
 				Dragged = false;
 				return base.Release(tc);

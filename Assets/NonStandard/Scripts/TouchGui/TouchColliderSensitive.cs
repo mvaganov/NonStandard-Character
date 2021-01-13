@@ -1,5 +1,6 @@
 ﻿using System;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace NonStandard.TouchGui
@@ -95,6 +96,10 @@ namespace NonStandard.TouchGui
 			if (onDragRelease != null) { onDragRelease.Invoke(); }
 			return true;
 		}
+
+		public virtual void PointerDown(BaseEventData data) { PressDown(null); }
+		public virtual void PointerUp(BaseEventData data) { Release(null); }
+		public virtual void PointerDrag(BaseEventData data) { Hold(null); }
 
 		public bool Pressed {
 			protected set {

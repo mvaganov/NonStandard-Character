@@ -14,5 +14,12 @@
 			eventSet.DoRelease();
 			return base.Release(tc);
 		}
+
+		public override void Start() {
+			base.Start();
+			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.PointerDown, PointerDown);
+			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.Drag, PointerDrag);
+			Ui.PointerTrigger.AddEvent(gameObject, UnityEngine.EventSystems.EventTriggerType.PointerUp, PointerUp);
+		}
 	}
 }

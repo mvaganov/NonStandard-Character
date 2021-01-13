@@ -42,6 +42,7 @@ namespace NonStandard.TouchGui
 		}
 
 		public TouchCollider GetTouch(int fingerId) {
+			if (fingerId < 0) return null;
 			for (int i = 0; i < touchColliders.Count; ++i) {
 				TouchCollider tc = touchColliders[i];
 				if (tc.touch.phase < TouchPhase.Ended && tc.touch.fingerId == fingerId) {
