@@ -1,30 +1,29 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using NonStandard.Code;
-using NonStandard.Ui;
-using UnityEngine.Events;
 using System;
 
 [System.Serializable] public class Dialog {
 	public string name;
+
 	public DialogOption[] options;
-	public abstract class DialogOption { }
+	public abstract class DialogOption {
+		public TextAnchor anchorText = TextAnchor.UpperLeft;
+	}
 
 	[System.Serializable] public class Text : DialogOption { public string text; }
 	[System.Serializable] public class Choice : DialogOption { public string text, command; }
 }
-
-[System.Serializable] public class UnityEvent_string : UnityEvent<string> { }
 
 public class DialogViewer : MonoBehaviour {
 	public TextAsset dialogAsset;
 	public List<Dialog> dialogs;
 	Dictionary<string, Action<string>> commandListing = new Dictionary<string, Action<string>>();
 
-	Dialog current;
 	ListUi listUi;
 	ListItemUi prefab_buttonUi, prefab_textUi;
 	List<ListItemUi> currentChoices = new List<ListItemUi>();
+	ListItemUi closeDialogButton;
 	public void InitializeListUi() {
 		listUi = GetComponentInChildren<ListUi>();
 		prefab_buttonUi = listUi.prefab_item;
@@ -36,21 +35,35 @@ public class DialogViewer : MonoBehaviour {
 		commandListing["done"] = Done;
 		commandListing["dialog"] = SetDialog;
 		commandListing["start"] = StartDialog;
+		commandListing["hide"] = Hide;
+		commandListing["show"] = Show;
 	}
-	public void AddDialogOption(Dialog.DialogOption option) {
+	public ListItemUi AddDialogOption(Dialog.DialogOption option) {
+		ListItemUi li = null;
 		Dialog.Text t = option as Dialog.Text;
 		if (t != null) {
-			listUi.AddItem(option, t.text, null, prefab_textUi);
-			return;
+			li = listUi.AddItem(option, t.text, null, prefab_textUi);
 		}
-		Dialog.Choice c = option as Dialog.Choice;
-		if (c != null) {
-			ListItemUi li = listUi.AddItem(option, c.text, ()=>ParseCommand(c.command), prefab_buttonUi);
-			currentChoices.Add(li);
-			return;
+		if (li == null) {
+			Dialog.Choice c = option as Dialog.Choice;
+			if (c != null) {
+				li = listUi.AddItem(option, c.text, () => ParseCommand(c.command), prefab_buttonUi);
+				currentChoices.Add(li);
+			}
 		}
+		li.text.alignment = option.anchorText;
+		return li;
 	}
+	public void ShowCloseDialogButton() {
+		Debug.Log(closeDialogButton);
+		if (closeDialogButton != null) { Destroy(closeDialogButton.gameObject); }
+		closeDialogButton = AddDialogOption(new Dialog.Choice { 
+			text = "\n<close dialog>\n", command = "hide", anchorText = TextAnchor.MiddleCenter });
+		currentChoices.Remove(closeDialogButton);
+	}
+
 	void Start () {
+		InitializeCommands();
 		InitializeListUi();
 		List<CodeConvert.Err> errors = new List<CodeConvert.Err>();
 		CodeConvert.TryParse(dialogAsset.text, out dialogs, errors);
@@ -59,7 +72,6 @@ public class DialogViewer : MonoBehaviour {
 		if (dialogs.Count > 0) {
 			SetDialog(dialogs[0], false);
 		}
-		InitializeCommands();
 	}
 	public void DeactivateDialogChoices() {
 		for (int i = 0; i < currentChoices.Count; ++i) {
@@ -67,7 +79,7 @@ public class DialogViewer : MonoBehaviour {
 		}
 		currentChoices.Clear();
 	}
-	public void RemoveOldDialogElements() {
+	public void RemoveDialogElements() {
 		DeactivateDialogChoices();
 		Transform pt = listUi.transform;
 		for (int i = 0; i < pt.childCount; ++i) {
@@ -79,13 +91,14 @@ public class DialogViewer : MonoBehaviour {
 	}
 	public void SetDialog(Dialog dialog, bool removeAllOldElements) {
 		if (removeAllOldElements) {
-			RemoveOldDialogElements();
+			RemoveDialogElements();
 		} else {
 			DeactivateDialogChoices();
 		}
-		current = dialog;
-		for(int i = 0; i < dialog.options.Length; ++i) {
-			AddDialogOption(dialog.options[i]);
+		if (dialog.options != null) {
+			for (int i = 0; i < dialog.options.Length; ++i) {
+				AddDialogOption(dialog.options[i]);
+			}
 		}
 	}
 	public void ParseCommand(string command) {
@@ -104,7 +117,7 @@ public class DialogViewer : MonoBehaviour {
 	public void StartDialog(string name) {
 		SetDialog(Array.Find(dialogs.ToArray(), d => d.name == name), true);
 	}
-	public void Done(string _) {
-		DeactivateDialogChoices();
-	}
+	public void Done(string _) { DeactivateDialogChoices(); ShowCloseDialogButton(); }
+	public void Show(string _) { gameObject.SetActive(true); }
+	public void Hide(string _) { gameObject.SetActive(false); }
 }

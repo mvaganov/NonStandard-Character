@@ -1,4 +1,5 @@
 [ // this JSON-like script is a list of dialogs, which will be parsed and compiled by CodeConvert.TryParse
+{ } // empty dialog to start with
 {
 	name = "welcome",
 	options = [

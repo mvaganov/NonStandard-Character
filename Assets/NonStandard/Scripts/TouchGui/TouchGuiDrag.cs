@@ -34,7 +34,10 @@ namespace NonStandard.TouchGui {
 
 		public override bool PressDown(TouchCollider tc) { return PressDown(tc.touch.position); }
 		public bool PressDown(Vector2 position) {
-			if (Dragged) { Debug.Log("ignored touch before drag finished"); return false; }
+			if (Dragged) {
+				//Debug.Log("ignored touch before drag finished");
+				return false;
+			}
 			if (triggeringCollider != null) {
 				fingerId = triggeringCollider.touch.fingerId;
 			} else { fingerId = -1; }
