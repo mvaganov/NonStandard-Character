@@ -42,17 +42,20 @@ namespace NonStandard.TouchGui {
 	
 		[System.Serializable]
 		public class JoystickOutput {
-			[System.Serializable]
-			public class UnityEventFloat : UnityEngine.Events.UnityEvent<float> { }
+			[System.Serializable] public class UnityEventFloat : UnityEngine.Events.UnityEvent<float> { }
 			public UnityEventFloat onHorizontalChange, onVerticalChange;
 			[Tooltip("Output of horizontal and vertical values will be in a range -1 to +1 multiplied by this value")]
 			public Vector2 outputMultiplier;
+			public bool sendOutput = true;
 			public void NotifyValue(float horizontal, float vertical) {
+				if (!sendOutput) return;
 				onHorizontalChange.Invoke(horizontal * outputMultiplier.x);
 				onVerticalChange.Invoke(vertical * outputMultiplier.y);
 			}
 		}
 		public JoystickOutput joystickOutput = new JoystickOutput { outputMultiplier = Vector2.one };
+
+		public void SendOutput(bool enableOutputSend) { joystickOutput.sendOutput = enableOutputSend; }
 
 		private void Start() {
 			if(EventSystem.current == null) {

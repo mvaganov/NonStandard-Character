@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Reflection;
 
-namespace NonStandard.Code {
+namespace NonStandard.Data {
 	public struct Token : IEquatable<Token>, IComparable<Token> {
 		public int index, length; // 32 bits x2
 		public object meta; // 64 bits

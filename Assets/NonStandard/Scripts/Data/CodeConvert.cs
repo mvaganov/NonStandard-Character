@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Text;
 
-namespace NonStandard.Code {
+namespace NonStandard.Data {
 	public class CodeConvert {
 		public struct Err {
 			public int row, col;
