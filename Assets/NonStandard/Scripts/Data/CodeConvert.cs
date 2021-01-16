@@ -14,7 +14,7 @@ namespace NonStandard.Data {
 				CodeParse.FilePositionOf(token, rows, out row, out col);
 				message = m;
 			}
-			public override string ToString() { return "@"+row+","+col+	": " + message; }
+			public override string ToString() { return "@" + row + "," + col + ": " + message; }
 			public static Err None = default(Err);
 			public void OffsetBy(Token token, IList<int> rows) {
 				int r, c; CodeParse.FilePositionOf(token, rows, out r, out c); row += r; col += c;
@@ -53,7 +53,8 @@ namespace NonStandard.Data {
 			bool isVarPrimitiveType = false, isList;
 			List<object> listData = null;
 			Token memberToken;
-			IDictionary dict;
+			//IDictionary dict;
+			KeyValuePair<Type, Type> dictionaryType;
 			IList<Token> tokens;
 			IList<int> rows;
 			List<Err> errors = null;
@@ -76,8 +77,9 @@ namespace NonStandard.Data {
 				SetResultType(type);
 				memberType = null;
 				isVarPrimitiveType = false;
-				memberType = GetIListType(type);
+				memberType = type.GetIListType();
 				isList = memberType != null;
+				memberToken.index = -1;
 				if (isList) {
 					isVarPrimitiveType = false;
 					if (memberType.IsArray) {
@@ -91,16 +93,16 @@ namespace NonStandard.Data {
 						if (t == null && result == null) { result = GetNew(type); }
 					} catch (Exception e) {
 						throw new Exception("failed to create " + type + " at " +
-							CodeParse.FilePositionOf(tokens[0], rows)+"\n"+e.ToString());
+							CodeParse.FilePositionOf(tokens[0], rows) + "\n" + e.ToString());
 					}
-					KeyValuePair<Type, Type> kvp = GetIDictionaryType(type);
-					if (kvp.Key != null) {
-						dict = result as IDictionary;
-					}
+					dictionaryType = type.GetIDictionaryType();
+					//UnityEngine.Debug.Log(type + " ~ " + dictionaryType.Key + " : " + dictionaryType.Value);// +"    ["+dict+"]");
+					if (dictionaryType.Value != null) { memberType = dictionaryType.Value; }
 				}
 			}
 
 			private Type FindInternalType() {
+				if (tokenIndex >= tokens.Count) return null;
 				Token token = tokens[tokenIndex];
 				if (token.IsContextBeginning) { token = tokens[++tokenIndex]; }
 				Delim d = token.AsDelimiter;
@@ -113,14 +115,14 @@ namespace NonStandard.Data {
 						++tokenIndex;
 						string typeName = memberValue.ToString();
 						Type t = Type.GetType(typeName);
-						if(t == null) {
+						if (t == null) {
 							Type[] childTypes = resultType.GetSubClasses();
 							string[] typeNames = Array.ConvertAll(childTypes, ty => ty.ToString());
 							string nameSearch = !typeName.StartsWith("*") ? "*" + typeName : typeName;
 							int index = FindIndexWithWildcard(typeNames, nameSearch, false);
-							if(index >= 0) { t = childTypes[index]; }
+							if (index >= 0) { t = childTypes[index]; }
 						}
-						if (result  == null || result.GetType() != t) {
+						if (result == null || result.GetType() != t) {
 							if (t != null) {
 								SetResultType(t);
 								result = GetNew(resultType);
@@ -138,12 +140,12 @@ namespace NonStandard.Data {
 
 			public bool TryParse() {
 				FindInternalType();
-				Token token = tokens[tokenIndex];
 				for (; tokenIndex < tokens.Count; ++tokenIndex) {
-					token = tokens[tokenIndex];
+					Token token = tokens[tokenIndex];
+					//Show.Log(":::" + token + "     " + dictionaryType.Key);
 					Context.Entry e = token.AsContextEntry;
 					if (e != null && (e.context == Context.CommentLine || e.context == Context.CommentBlock || e.context == Context.XmlCommentLine)) {
-						tokenIndex += e.tokenCount-1; continue;
+						tokenIndex += e.tokenCount - 1; continue;
 					}
 					if (token.IsContextBeginning && !token.AsContextEntry.IsText) {
 						if (memberType != null && isVarPrimitiveType) {
@@ -156,14 +158,21 @@ namespace NonStandard.Data {
 						break;
 					}
 					if (!isList) {
-						if (memberType == null) {
+						if (memberToken.index < 0) {// memberType == null) {
 							if (!GetMemberNameAndAssociatedType()) { return false; }
-							if(memberValue == tokens) { memberValue = null; continue; }
+							if (memberValue == tokens) { memberValue = null; continue; }
 						} else {
 							if (!TryGetValue()) { return false; }
 							if (memberValue == tokens) { continue; } // this is how TryGetValue communicates value ignore
-							if (dict != null) {
-								dict.Add(memberToken.Resolve(), memberValue);
+							if (dictionaryType.Key != null) {
+								MethodInfo addMethod = resultType.GetMethod("Add", new Type[] { dictionaryType.Key, dictionaryType.Value });
+								object key = memberToken.Resolve();
+								if (!memberType.IsAssignableFrom(memberValue.GetType())) {
+									if (errors != null) errors.Add(new Err(token, rows, "unable to convert element \"" + key + "\" value \"" + memberValue + "\" to type " + memberType));
+								} else {
+									//Show.Log(key + " = " + memberValue + " (" + memberValue.GetType() + " vs " + dictionaryType.Value + ")");
+									addMethod.Invoke(result, new object[] { key, memberValue });
+								}
 							} else if (field != null) {
 								field.SetValue(result, memberValue);
 							} else if (prop != null) {
@@ -171,7 +180,7 @@ namespace NonStandard.Data {
 							} else {
 								throw new Exception("huh? how did we get here?");
 							}
-							field = null; prop = null; memberType = null;
+							field = null; prop = null; memberType = dictionaryType.Value; memberToken.index = -1;
 						}
 					} else {
 						if (!TryGetValue()) { return false; }
@@ -198,20 +207,24 @@ namespace NonStandard.Data {
 				string str = null;
 				Context.Entry e = memberToken.AsContextEntry;
 				if (e != null) {
-					// skip comments
-					if (dict == null) {
+					if (dictionaryType.Key == null) {
 						if (e.IsText) {
 							str = e.Text;
 						} else {
-							if (errors != null) errors.Add(new Err(memberToken, rows, "unable to parse member name "+e.BeginToken+" for " + resultType));
+							if (errors != null) errors.Add(new Err(memberToken, rows, "unable to parse member name " + e.BeginToken + " for " + resultType));
 						}
+					} else {
+						str = "dictionary member value will be resolved later";
 					}
 					tokenIndex += e.tokenCount - 1;
 				} else {
 					str = memberToken.AsBasicToken;
 				}
-				if (dict != null) { return true; }
-				if (str == null) { memberValue = tokens; return true; }
+				if (str == null) { memberToken.index = -1; memberValue = tokens; return true; }
+				if (dictionaryType.Key != null) {
+					//UnityEngine.Debug.Log("dictionary member [" + memberToken + "]");
+					return true;
+				}
 				int index = FindIndexWithWildcard(fieldNames, str, true);
 				if (index < 0) {
 					index = FindIndexWithWildcard(propNames, str, true);
@@ -219,7 +232,7 @@ namespace NonStandard.Data {
 						if (errors != null) {
 							StringBuilder sb = new StringBuilder();
 							sb.Append("\nvalid possibilities include: ");
-							for(int i = 0; i < fieldNames.Length; ++i) {
+							for (int i = 0; i < fieldNames.Length; ++i) {
 								if (i > 0) sb.Append(", ");
 								sb.Append(fieldNames[i]);
 							}
@@ -227,7 +240,7 @@ namespace NonStandard.Data {
 								if (i > 0 || fieldNames.Length > 0) sb.Append(", ");
 								sb.Append(propNames[i]);
 							}
-							errors.Add(new Err(memberToken, rows, "could not find field or property \"" + str + "\" in " + resultType+sb));
+							errors.Add(new Err(memberToken, rows, "could not find field or property \"" + str + "\" in " + result.GetType() + sb));
 						}
 						return false;
 					} else {
@@ -370,158 +383,10 @@ namespace NonStandard.Data {
 			if (startsWith && endsWith) { return Array.FindIndex(names, s => s.Contains(name.Substring(1, name.Length - 2))); }
 			if (endsWith) { name = name.Substring(1); return Array.FindIndex(names, s => s.EndsWith(name)); }
 			if (startsWith) { name = name.Substring(0, name.Length - 1); }
-			int index = isSorted ? Array.BinarySearch(names, name) : (startsWith) 
+			int index = isSorted ? Array.BinarySearch(names, name) : (startsWith)
 				? Array.FindIndex(names, s => s.StartsWith(name)) : Array.IndexOf(names, name);
 			if (startsWith && index < 0) { return ~index; }
 			return index;
-		}
-
-		public static Type GetICollectionType(Type type) {
-			foreach (Type i in type.GetInterfaces()) {
-				if (i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>)) {
-					return i.GetGenericArguments()[0];
-				}
-			}
-			return null;
-		}
-		public static Type GetIListType(Type type) {
-			foreach (Type i in type.GetInterfaces()) {
-				if (i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IList<>)) {
-					return i.GetGenericArguments()[0];
-				}
-			}
-			return null;
-		}
-		public static KeyValuePair<Type,Type> GetIDictionaryType(Type type) {
-			foreach (Type i in type.GetInterfaces()) {
-				if (i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>)) {
-					return new KeyValuePair<Type,Type>(i.GetGenericArguments()[0], i.GetGenericArguments()[1]);
-				}
-			}
-			return new KeyValuePair<Type, Type>(null,null);
-		}
-		public static string Indent(int depth, string indent = "  ") {
-			StringBuilder sb = new StringBuilder();
-			while (depth-- > 0) { sb.Append(indent); }
-			return sb.ToString();
-		}
-		/// <summary>
-		/// 
-		/// </summary>
-		/// <param name="obj"></param>
-		/// <param name="pretty"></param>
-		/// <param name="includeType">include "=TypeName" if there could be ambiguity because of inheritance</param>
-		/// <param name="depth"></param>
-		/// <returns></returns>
-		public static string Stringify(object obj, bool pretty = false, bool includeType = true, int depth = 0) {
-			if (obj == null) return "null";
-			Type t = obj.GetType();
-			StringBuilder sb = new StringBuilder();
-			FieldInfo[] fi = t.GetFields();
-			Type iListElement = GetIListType(t);
-			bool showTypeHere = includeType; // no need to print type if there isn't type ambiguity
-			if (includeType) {
-				Type b = t.BaseType; // if the parent class is a base class, there isn't any ambiguity
-				if (b == typeof(ValueType) || b == typeof(Object) || b == typeof(Array)) { showTypeHere = false; }
-			}
-			if(IsPrimitiveType(obj.GetType())) {
-				string s = obj as string;
-				if (s != null) {
-					sb.Append("\"").Append(Escape(s)).Append("\"");
-				} else {
-					sb.Append(obj.ToString());
-				}
-			} else if (t.IsArray || iListElement != null) {
-				sb.Append("[");
-				if (showTypeHere) {
-					if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
-					sb.Append("=\"" + obj.GetType().ToString() + "\" "+obj.GetType().BaseType);
-				}
-				IList list = obj as IList;
-				if ((iListElement != null && IsPrimitiveType(iListElement)) || IsPrimitiveType(t.GetElementType())) {
-					for(int i = 0; i < list.Count; ++i) {
-						if (i > 0) { sb.Append(","); if (pretty) sb.Append(" "); }
-						sb.Append(Stringify(list[i], pretty, includeType, depth + 1));
-					}
-				} else {
-					for(int i = 0; i < list.Count; ++i) {
-						if (i > 0) { sb.Append(","); }
-						if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
-						sb.Append(Stringify(list[i], pretty, includeType, depth + 1));
-					}
-					if (pretty) { sb.Append("\n" + Indent(depth)); }
-				}
-				sb.Append("]");
-			} else if (fi.Length > 0) {
-				sb.Append("{");
-				if (showTypeHere) {
-					if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
-					sb.Append("=\""+obj.GetType().ToString()+"\"");
-				}
-				for (int i = 0; i < fi.Length; ++i) {
-					if (i > 0 || showTypeHere) { sb.Append(","); }
-					if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
-					sb.Append(fi[i].Name);
-					sb.Append(pretty?" : ":":");
-					sb.Append(Stringify(fi[i].GetValue(obj), pretty, includeType, depth + 1));
-				}
-				if (pretty) { sb.Append("\n" + Indent(depth)); }
-				sb.Append("}");
-			}
-			if(sb.Length == 0) { sb.Append(obj.ToString()); }
-			return sb.ToString();
-		}
-
-		/// <summary>
-		/// converts a string from it's code to it's compiled form, with processed escape sequences
-		/// </summary>
-		/// <param name="str"></param>
-		/// <returns></returns>
-		public static string Unescape(string str) {
-			ParseResult parse;
-			StringBuilder sb = new StringBuilder();
-			int stringStarted = 0;
-			for (int i = 0; i < str.Length; ++i) {
-				char c = str[i];
-				if (c == '\\') {
-					sb.Append(str.Substring(stringStarted, i - stringStarted));
-					parse = Delim.UnescapeString(str, i);
-					if (parse.replacementValue != null) { sb.Append(parse.replacementValue); }
-					stringStarted = i + parse.lengthParsed;
-					i = stringStarted - 1;
-				}
-			}
-			sb.Append(str.Substring(stringStarted, str.Length - stringStarted));
-			return sb.ToString();
-		}
-
-		public static string Escape(string str) {
-			StringBuilder sb = new StringBuilder();
-			for (int i = 0; i < str.Length; ++i) {
-				char c = str[i];
-				switch (c) {
-				case '\a': sb.Append("\\a"); break;
-				case '\b': sb.Append("\\b"); break;
-				case '\n': sb.Append("\\n"); break;
-				case '\r': sb.Append("\\r"); break;
-				case '\f': sb.Append("\\f"); break;
-				case '\t': sb.Append("\\t"); break;
-				case '\v': sb.Append("\\v"); break;
-				case '\'': sb.Append("\\\'"); break;
-				case '\"': sb.Append("\\\""); break;
-				case '\\': sb.Append("\\\\"); break;
-				default:
-					if (c < 32 || (c > 127 && c < 512)) {
-						sb.Append("\\").Append(Convert.ToString((int)c, 8));
-					} else if (c >= 512) {
-						sb.Append("\\u").Append(((int)c).ToString("X4"));
-					} else {
-						sb.Append(c);
-					}
-					break;
-				}
-			}
-			return sb.ToString();
 		}
 
 	}

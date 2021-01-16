@@ -10,10 +10,18 @@ namespace NonStandard.Data {
 #if UNITY_EDITOR
 		[TextArea(3,10)]
 		public string values;
+		[TextArea(1, 10)]
+		public string parseResults;
 
 		bool validating = false;
 		void OnValidate() {
-			// TODO try to parse the dictionary. if unable to parse
+			List<CodeConvert.Err> errors = new List<CodeConvert.Err>();
+			CodeConvert.TryParse(values, out dict, errors);
+			if (errors.Count > 0) {
+				parseResults = string.Join("\n", errors.ConvertAll(e => e.ToString()).ToArray());
+			} else {
+				parseResults = dict.Show(true);
+			}
 		}
 		void ShowChange() {
 			if (!validating) {
@@ -24,14 +32,14 @@ namespace NonStandard.Data {
 #else
 		void ShowChange(){}
 #endif
-		// TODO editing 'values' text area will add to this list, and populate 'dict' on Awake
-		[HideInInspector, SerializeField] List<KVP> initialValues = new List<KVP>();
 		[System.Serializable] public class KVP { public string key; public float value; }
 
 		void Awake() { }
 
 		void Start() {
-			dict.onChange += (k, a, b) => { Debug.Log(k+" : "+a+" -> "+b); ShowChange(); };
+			#if UNITY_EDITOR
+			dict.onChange += (k, a, b) => { ShowChange(); };
+			#endif
 			string[] mainStats = new string[] { "str", "con", "dex", "int", "wis", "cha" };
 			int[] scores = { 8, 8, 18, 12, 9, 14 };
 			for(int i = 0; i < mainStats.Length; ++i) {

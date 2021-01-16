@@ -76,7 +76,7 @@ public class DialogViewer : MonoBehaviour {
 		List<CodeConvert.Err> errors = new List<CodeConvert.Err>();
 		CodeConvert.TryParse(dialogAsset.text, out dialogs, errors);
 		errors.ForEach(e => Debug.LogError(e));
-		Debug.Log(CodeConvert.Stringify(dialogs, true));
+		NonStandard.Show.Log(NonStandard.Show.Stringify(dialogs, true));
 		if (dialogs.Count > 0) { SetDialog(dialogs[0], false); }
 	}
 	void Start () { Init(); }

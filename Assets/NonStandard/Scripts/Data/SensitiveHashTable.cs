@@ -10,7 +10,8 @@ namespace NonStandard.Data {
 	/// </summary>
 	/// <typeparam name="KEY"></typeparam>
 	/// <typeparam name="VAL"></typeparam>
-	public class SensitiveHashTable<KEY, VAL> : IDictionary<KEY, VAL> where VAL : IEquatable<VAL> where KEY : IComparable<KEY> {
+	[Serializable] public class SensitiveHashTable<KEY, VAL> : IDictionary<KEY, VAL> 
+	where VAL : IEquatable<VAL> where KEY : IComparable<KEY> {
 		public Func<KEY, int> hFunc = null;
 		public List<List<KV>> buckets;
 		public const int defaultBuckets = 8;

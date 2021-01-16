@@ -60,7 +60,7 @@ namespace NonStandard.Data {
 		}
 		public ParseResult AddToLength(int count) { lengthParsed += count; error.col += count; return this; }
 		public ParseResult ForceCharSubstitute() { replacementValue = Convert.ToChar(replacementValue); return this; }
-		public ParseResult SetError(string errorMessage, int row=0, int col=0) {
+		public ParseResult SetError(string errorMessage, int row = 0, int col = 0) {
 			error = new CodeConvert.Err(row, col, errorMessage); return this;
 		}
 	}
@@ -71,8 +71,8 @@ namespace NonStandard.Data {
 	public class DelimCtx : Delim {
 		public Context Context {
 			get {
-				return foundContext != null ? foundContext
-: Context.allContexts.TryGetValue(contextName, out foundContext) ? foundContext : null;
+				return foundContext != null ? foundContext :
+					Context.allContexts.TryGetValue(contextName, out foundContext) ? foundContext : null;
 			}
 		}
 		private Context foundContext = null;
@@ -107,9 +107,9 @@ namespace NonStandard.Data {
 			return delims.ToArray();
 		}
 		public int CompareTo(Delim other) {
-			if (text.Length > other.text.Length) return -1;
-			if (text.Length < other.text.Length) return 1;
-			return text.CompareTo(other.text);
+			int len = Math.Min(text.Length, other.text.Length);
+			for (int i = 0; i < len; ++i) { int comp = text[i] - other.text[i]; if (comp != 0) return comp; }
+			return (text.Length > other.text.Length) ? -1 : (text.Length < other.text.Length) ? 1 : 0;
 		}
 		public static ParseResult HexadecimalParse(string str, int index) {
 			return NumberParse(str, index + 2, 16, false);
@@ -171,7 +171,7 @@ namespace NonStandard.Data {
 			ParseResult r = new ParseResult(0, null); // by default, nothing happened
 			if (str.Length <= index) { return r.SetError("invalid arguments"); }
 			if (str[index] != '\\') { return r.SetError("expected escape sequence starting with '\\'"); }
-			if (str.Length <= index + 1) { return r.SetError("unable to parse escape sequence at end of string", 0,1); }
+			if (str.Length <= index + 1) { return r.SetError("unable to parse escape sequence at end of string", 0, 1); }
 			char c = str[index + 1];
 			switch (c) {
 			case '\n': return new ParseResult(index + 2, "");
@@ -195,7 +195,14 @@ namespace NonStandard.Data {
 			case 'x': return NumberParse(str, index + 2, 2, 16, false).AddToLength(2).ForceCharSubstitute();
 			case 'u': return NumberParse(str, index + 2, 4, 16, false).AddToLength(2).ForceCharSubstitute();
 			case 'U': return NumberParse(str, index + 2, 8, 16, false).AddToLength(2).ForceCharSubstitute();
-			case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
+			case '0':
+			case '1':
+			case '2':
+			case '3':
+			case '4':
+			case '5':
+			case '6':
+			case '7': {
 				int digitCount = 1;
 				do {
 					if (str.Length <= index + digitCount + 1) break;
@@ -206,7 +213,7 @@ namespace NonStandard.Data {
 				return NumberParse(str, index + 1, digitCount, 8, false).AddToLength(1);
 			}
 			}
-			return r.SetError("unknown escape sequence", 0,1);
+			return r.SetError("unknown escape sequence", 0, 1);
 		}
 
 		private static void GiveDesc(Delim[] delims, string desc) {
@@ -311,18 +318,54 @@ namespace NonStandard.Data {
 			String.whitespace = Delim.WhitespaceNone;
 			String.delimiters = Delim.StringLiteralDelimiters;
 			Number.whitespace = Delim.WhitespaceNone;
+			//StringBuilder sb = new StringBuilder();
+			//for(int i = 0; i < Delim.StandardDelimiters.Length; ++i) {
+			//	sb.Append(Delim.StandardDelimiters[i].text).Append("\n");
+			//}
+			//UnityEngine.Debug.Log(sb);
 		}
 		public string name = "default";
 		public char[] whitespace = Delim.WhitespaceDefault;
-		public Delim[] delimiters = Delim.StandardDelimiters;
+		private Delim[] delimiters = Delim.StandardDelimiters;
 		public Func<Entry, object> resolve;
+		/// <summary>
+		/// data used to make delimiter searching very fast
+		/// </summary>
+		private char minDelim = char.MaxValue, maxDelim = char.MinValue; private int[] textLookup;
 		public Context(string name) {
 			this.name = name;
 			allContexts[name] = this;
 		}
+		/// <summary>
+		/// set the delimiters of this Context, also calculating a simple lookup table
+		/// </summary>
+		/// <param name="delims"></param>
+		public void SetDelimiters(Delim[] delims) {
+			char c, last = delims[0].text[0];
+			for (int i = 0; i < delims.Length; ++i) {
+				c = delims[i].text[0];
+				if (c < last) { Array.Sort(delims); SetDelimiters(delims); return; }
+				if (c < minDelim) minDelim = c;
+				if (c > maxDelim) maxDelim = c;
+			}
+			textLookup = new int[maxDelim + 1 - minDelim];
+			for (int i = 0; i < textLookup.Length; ++i) { textLookup[i] = -1; }
+			for (int i = 0; i < delims.Length; ++i) {
+				c = delims[i].text[0];
+				int lookupIndex = c - minDelim; // where in the delimiters list this character can be found
+				if (textLookup[lookupIndex] < 0) { textLookup[lookupIndex] = i; }
+			}
+		}
 		public int IndexOfDelimeterAt(string str, int index) {
-			for (int i = 0; i < delimiters.Length; ++i) {
-				if (delimiters[i].IsAt(str, index)) { return i; }
+			if (minDelim > maxDelim) { SetDelimiters(delimiters); }
+			char c = str[index];
+			if (c < minDelim || c > maxDelim) return -1;
+			int i = textLookup[c - minDelim];
+			if (i < 0) return -1;
+			while (i < delimiters.Length) {
+				if (delimiters[i].text[0] != c) break;
+				if (delimiters[i].IsAt(str, index)) return i;
+				++i;
 			}
 			return -1;
 		}
@@ -452,6 +495,17 @@ namespace NonStandard.Data {
 				tokenEnd = index;
 				int len = tokenEnd - tokenBegin;
 				tokens.Add(new Token(str, tokenBegin, len));
+			}
+			// final check of tokens
+			for (int i = 0; i < tokens.Count; ++i) {
+				// any unfinished contexts must end. the last place they could end is the end of this token stream
+				Context.Entry e = tokens[i].AsContextEntry;
+				if (e != null && e.tokenCount < 0) {
+					e.tokenCount = tokens.Count - e.tokenStart;
+					if (e.context != Context.CommentLine) {
+						errors.Add(new CodeConvert.Err(tokens[i], rows, "missing closing token"));
+					}
+				}
 			}
 			return index;
 		}

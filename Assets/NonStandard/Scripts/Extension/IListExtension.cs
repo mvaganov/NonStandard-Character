@@ -24,4 +24,13 @@ public static class IListExtension {
 		for (int i = 0; i < length; ++i) { list[i] = source[index + i]; }
 		return list;
 	}
+
+	public static string Join<T>(this IList<T> source, string separator, Func<T,string> toString = null) {
+		string[] strings = new string[source.Count];
+		if(toString == null) { toString = o => o.ToString(); }
+		for(int i = 0; i < strings.Length; ++i) {
+			strings[i] = toString.Invoke(source[i]);
+		}
+		return string.Join(separator, strings);
+	}
 }
