@@ -3,6 +3,7 @@ using UnityEngine;
 using NonStandard.Data;
 using System;
 using UnityEngine.UI;
+using NonStandard;
 
 [Serializable] public class Dialog {
 	public string name;
@@ -10,12 +11,14 @@ using UnityEngine.UI;
 	public abstract class DialogOption { public string text; public TextAnchor anchorText = TextAnchor.UpperLeft; }
 	[Serializable] public class Text : DialogOption { }
 	[Serializable] public class Choice : DialogOption { public string command; }
+	[Serializable] public class Command : DialogOption { public string command; }
 }
 
 public class DialogViewer : MonoBehaviour {
 	public TextAsset dialogAsset;
 	public List<Dialog> dialogs;
 	public ScrollRect scrollRect;
+	public List<string> errors = new List<string>();
 	Dictionary<string, Action<string>> commandListing = new Dictionary<string, Action<string>>();
 
 	ListUi listUi;
@@ -47,6 +50,11 @@ public class DialogViewer : MonoBehaviour {
 				currentChoices.Add(li);
 				break;
 			}
+			Dialog.Command cmd = option as Dialog.Command;
+			if(cmd != null) {
+				ParseCommand(cmd.command);
+				break;
+			}
 		}
 		while (false);
 		if (li != null) {
@@ -73,11 +81,12 @@ public class DialogViewer : MonoBehaviour {
 		if (initialized) { return; } else { initialized = true; }
 		InitializeCommands();
 		InitializeListUi();
-		List<CodeConvert.Err> errors = new List<CodeConvert.Err>();
+		List<ParseError> errors = new List<ParseError>();
 		CodeConvert.TryParse(dialogAsset.text, out dialogs, errors);
 		errors.ForEach(e => Debug.LogError(e));
 		//Debug.Log(NonStandard.Show.Stringify(dialogs, true));
-		if (dialogs.Count > 0) { SetDialog(dialogs[0], false); }
+		if (dialogs == null) { dialogs = new List<Dialog>(); }
+		if (dialogs.Count > 0) { SetDialog(dialogs[0], UiPolicy.StartOver); }
 	}
 	void Start () { Init(); }
 	public void DeactivateDialogChoices() {
@@ -96,16 +105,18 @@ public class DialogViewer : MonoBehaviour {
 			}
 		}
 	}
-	public void SetDialog(Dialog dialog, bool removeAllOldElements) {
+	public enum UiPolicy { StartOver, DisablePrev, Continue }
+	public void SetDialog(Dialog dialog, UiPolicy uiPolicy) {
 		if (!initialized) { Init(); }
-		if (removeAllOldElements) {
-			RemoveDialogElements();
-		} else {
-			DeactivateDialogChoices();
+		bool isScrolledAllTheWayDown = !scrollRect.verticalScrollbar.gameObject.activeInHierarchy ||
+			scrollRect.verticalNormalizedPosition < 1f / 1024; // keep scrolling down if really close to bottom
+		switch (uiPolicy) {
+		case UiPolicy.StartOver: RemoveDialogElements(); break;
+		case UiPolicy.DisablePrev: DeactivateDialogChoices(); break;
+		case UiPolicy.Continue: break;
 		}
+		if (dialog == null) { errors.Add("missing dialog");  return; }
 		if (dialog.options != null) {
-			bool isScrolledAllTheWayDown = !scrollRect.verticalScrollbar.gameObject.activeInHierarchy ||
-				scrollRect.verticalNormalizedPosition < 1f / 1024; // keep scrolling down if really close to bottom
 			for (int i = 0; i < dialog.options.Length; ++i) {
 				AddDialogOption(dialog.options[i], isScrolledAllTheWayDown);
 			}
@@ -117,20 +128,32 @@ public class DialogViewer : MonoBehaviour {
 		if(endOfCommand < 0) { endOfCommand = command.Length; }
 		string cmd = command.Substring(0, endOfCommand);
 		Action<string> commandToExecute;
-		if(commandListing.TryGetValue(cmd, out commandToExecute)) {
+		if (commandListing.TryGetValue(cmd, out commandToExecute)) {
 			string nextCommand = endOfCommand < command.Length ? command.Substring(endOfCommand + 1) : "";
 			commandToExecute.Invoke(nextCommand);
+		} else {
+			errors.Add("unknown command \'" + cmd + "\'");
+		}
+		if (errors.Count > 0) {
+			for (int i = 0; i < errors.Count; ++i) {
+				ListItemUi li = AddDialogOption(new Dialog.Text { text = errors[i] }, true);
+				li.text.color = Color.red;
+			}
+			errors.Clear();
 		}
 	}
 	private void InitializeCommands() {
 		commandListing["dialog"] = SetDialog;
 		commandListing["start"] = StartDialog;
+		commandListing["continue"] = ContinueDialog;
 		commandListing["done"] = Done;
 		commandListing["hide"] = Hide;
 		commandListing["show"] = Show;
+		commandListing["exit"] = s=>PlatformAdjust.Exit();
 	}
-	public void SetDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), false); }
-	public void StartDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), true); }
+	public void SetDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.DisablePrev); }
+	public void StartDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.StartOver); }
+	public void ContinueDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.Continue); }
 	public void Done(string _) { DeactivateDialogChoices(); ShowCloseDialogButton(); }
 	public void Hide(string _) { gameObject.SetActive(false); }
 	public void Show(string _) { gameObject.SetActive(true); }

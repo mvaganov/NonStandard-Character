@@ -30,6 +30,7 @@ namespace NonStandard.Data {
 		public bool IsContextBeginning { get { Context.Entry ctx = AsContextEntry; if (ctx != null) { return ctx.BeginToken == this; } return false; } }
 		public bool IsContextEnding { get { Context.Entry ctx = AsContextEntry; if (ctx != null) { return ctx.EndToken == this; } return false; } }
 		public bool IsValid { get { return index >= 0 && length >= 0; } }
+		public void Invalidate() { index = -1; }
 		public bool Equals(Token other) { return index == other.index && length == other.length && meta == other.meta; }
 		public override bool Equals(object obj) { if (obj is Token) return Equals((Token)obj); return false; }
 		public override int GetHashCode() { return meta.GetHashCode() ^ index ^ length; }
@@ -53,20 +54,20 @@ namespace NonStandard.Data {
 		/// <summary>
 		/// null unless there was an error processing this delimeter
 		/// </summary>
-		public CodeConvert.Err error;
+		public ParseError error;
 		public bool IsError { get { return !string.IsNullOrEmpty(error.message); } }
 		public ParseResult(int length, object value, string err = null, int r = 0, int c = 0) {
-			lengthParsed = length; replacementValue = value; error = new CodeConvert.Err(r, c, err);
+			lengthParsed = length; replacementValue = value; error = new ParseError(r, c, err);
 		}
 		public ParseResult AddToLength(int count) { lengthParsed += count; error.col += count; return this; }
 		public ParseResult ForceCharSubstitute() { replacementValue = Convert.ToChar(replacementValue); return this; }
 		public ParseResult SetError(string errorMessage, int row = 0, int col = 0) {
-			error = new CodeConvert.Err(row, col, errorMessage); return this;
+			error = new ParseError(row, col, errorMessage); return this;
 		}
 	}
 	public class TokenSubstitution {
-		public string orig; public object value;
-		public TokenSubstitution(string o, object v) { orig = o; value = v; }
+		public string origSrc; public object value;
+		public TokenSubstitution(string o, object v) { origSrc = o; value = v; }
 	}
 	public class DelimCtx : Delim {
 		public Context Context {
@@ -84,21 +85,69 @@ namespace NonStandard.Data {
 			contextName = ctx; isStart = s; isEnd = e;
 		}
 	}
+	public class DelimOp : Delim {
+		public Func<List<Token>, int, Context.Entry> isSyntaxValid = null;
+		public Func<List<Token>, int, object, object> resolve = null;
+		public DelimOp(string delim, string name = null, string desc = null,
+			Func<string, int, ParseResult> parseRule = null,
+			Func<string, int, bool> addReq = null, Func<List<Token>, int, Context.Entry> syntax = null,
+			Func<List<Token>, int, object, object> resolve = null) 
+			: base(delim, name, desc,parseRule, addReq) {
+			isSyntaxValid = syntax; this.resolve = resolve;
+		}
+		public static Context.Entry op_Binary(List<Token> tokens, int index, string contextName) {
+			Context foundContext; Context.allContexts.TryGetValue(contextName, out foundContext);
+			if (foundContext == null) { throw new Exception("context '"+contextName+"' does not exist"); }
+			Context.Entry e = foundContext.GetEntry(tokens, index - 1, null, null);
+			e.tokenCount = 3;
+			return e;
+		}
+		public static Context.Entry op_add(List<Token> tokens, int index) { return op_Binary(tokens, index, "sum"); }
+		public static Context.Entry op_dif(List<Token> tokens, int index) { return op_Binary(tokens, index, "difference"); }
+		public static Context.Entry op_mul(List<Token> tokens, int index) { return op_Binary(tokens, index, "product"); }
+		public static Context.Entry op_div(List<Token> tokens, int index) { return op_Binary(tokens, index, "quotient"); }
+		public static Context.Entry op_mod(List<Token> tokens, int index) { return op_Binary(tokens, index, "modulus"); }
+		public static Context.Entry op_pow(List<Token> tokens, int index) { return op_Binary(tokens, index, "power"); }
+		public static Context.Entry op_logicalAnd(List<Token> tokens, int index) { return op_Binary(tokens, index, "logical and"); }
+		public static Context.Entry op_logicalOr(List<Token> tokens, int index) { return op_Binary(tokens, index, "logical or"); }
+		public static Context.Entry op_assign(List<Token> tokens, int index) { return op_Binary(tokens, index, "assign"); }
+		public static Context.Entry op_equal(List<Token> tokens, int index) { return op_Binary(tokens, index, "equal"); }
+		public static Context.Entry op_notEqual(List<Token> tokens, int index) { return op_Binary(tokens, index, "not equal"); }
+		public static Context.Entry op_lessThan(List<Token> tokens, int index) { return op_Binary(tokens, index, "less than"); }
+		public static Context.Entry op_greaterThan(List<Token> tokens, int index) { return op_Binary(tokens, index, "greater than"); }
+		public static Context.Entry op_lessThanOrEqual(List<Token> tokens, int index) { return op_Binary(tokens, index, "less than or equal"); }
+		public static Context.Entry op_greaterThanOrEqual(List<Token> tokens, int index) { return op_Binary(tokens, index, "greater than or equal"); }
+		public static object res_add(List<Token> tokens, int index, object context) { return "+"; }
+		public static object res_dif(List<Token> tokens, int index, object context) { return "-"; }
+		public static object res_mul(List<Token> tokens, int index, object context) { return "*"; }
+		public static object res_div(List<Token> tokens, int index, object context) { return "/"; }
+		public static object res_mod(List<Token> tokens, int index, object context) { return "%"; }
+		public static object res_pow(List<Token> tokens, int index, object context) { return "^^"; }
+		public static object res_and(List<Token> tokens, int index, object context) { return "&&"; }
+		public static object res_or_(List<Token> tokens, int index, object context) { return "||"; }
+		public static object res_asn(List<Token> tokens, int index, object context) { return "="; }
+		public static object res_equ(List<Token> tokens, int index, object context) { return "=="; }
+		public static object res_neq(List<Token> tokens, int index, object context) { return "!="; }
+		public static object res_lt_(List<Token> tokens, int index, object context) { return "<"; }
+		public static object res_gt_(List<Token> tokens, int index, object context) { return ">"; }
+		public static object res_lte(List<Token> tokens, int index, object context) { return "<="; }
+		public static object res_gte(List<Token> tokens, int index, object context) { return ">="; }
+	}
 	public class Delim : IComparable<Delim> {
 		public string text, name, description;
 		public Func<string, int, ParseResult> parseRule = null;
-		public Func<string, int, bool> addedRequirement = null;
+		public Func<string, int, bool> extraReq = null;
 		public Delim(string delim, string name = null, string desc = null, 
 			Func<string, int, ParseResult> parseRule = null,
 			Func<string, int, bool> addReq = null) {
-			text = delim; this.name = name; description = desc; this.parseRule = parseRule; addedRequirement = addReq;
+			text = delim; this.name = name; description = desc; this.parseRule = parseRule; extraReq = addReq;
 		}
 		public bool IsAt(string str, int index) {
 			if (index + text.Length > str.Length) { return false; }
 			for (int i = 0; i < text.Length; ++i) {
 				if (text[i] != str[index + i]) return false;
 			}
-			if(addedRequirement != null) { return addedRequirement.Invoke(str, index); }
+			if(extraReq != null) { return extraReq.Invoke(str, index); }
 			return true;
 		}
 		public override string ToString() { return text; }
@@ -115,8 +164,8 @@ namespace NonStandard.Data {
 			for (int i = 0; i < len; ++i) { int comp = text[i] - other.text[i]; if (comp != 0) return comp; }
 			if (text.Length > other.text.Length) return -1;
 			if (text.Length < other.text.Length) return 1;
-			if (addedRequirement != null && other.addedRequirement == null) return -1;
-			if (addedRequirement == null && other.addedRequirement != null) return 1;
+			if (extraReq != null && other.extraReq == null) return -1;
+			if (extraReq == null && other.extraReq != null) return 1;
 			return 0;
 		}
 		public static ParseResult HexadecimalParse(string str, int index) {
@@ -223,8 +272,8 @@ namespace NonStandard.Data {
 			case 'a': return new ParseResult(2, "\a");
 			case 'b': return new ParseResult(2, "\b");
 			case 'e': return new ParseResult(2, ((char)27).ToString());
-			case 'r': return new ParseResult(2, "\r");
 			case 'f': return new ParseResult(2, "\f");
+			case 'r': return new ParseResult(2, "\r");
 			case 'n': return new ParseResult(2, "\n");
 			case 't': return new ParseResult(2, "\t");
 			case 'v': return new ParseResult(2, "\v");
@@ -281,7 +330,14 @@ namespace NonStandard.Data {
 		public static Delim[] _binary_logic_operatpor = new Delim[] { "==", "!=", "<", ">", "<=", ">=", "&&", "||" };
 		public static Delim[] _assignment_operator = new Delim[] { "+=", "-=", "*=", "/=", "%=", "|=", "&=", "<<=", ">>=", "??=", "=" };
 		public static Delim[] _lambda_operator = new Delim[] { "=>" };
-		public static Delim[] _math_operator = new Delim[] { "+", "-", "*", "/", "%" };
+		public static Delim[] _math_operator = new DelimOp[] { 
+			new DelimOp("+",syntax:DelimOp.op_add,resolve:DelimOp.res_add),
+			new DelimOp("-",syntax:DelimOp.op_dif,resolve:DelimOp.res_dif),
+			new DelimOp("*",syntax:DelimOp.op_mul,resolve:DelimOp.res_mul),
+			new DelimOp("/",syntax:DelimOp.op_div,resolve:DelimOp.res_div),
+			new DelimOp("%",syntax:DelimOp.op_mod,resolve:DelimOp.res_mod),
+			new DelimOp("^^",syntax:DelimOp.op_pow,resolve:DelimOp.res_pow),
+		};
 		public static Delim[] _hex_number_prefix = new Delim[] { new DelimCtx("0x", ctx: "0x", parseRule: HexadecimalParse) };
 		public static Delim[] _number = new Delim[] {
 			new DelimCtx("-",ctx:"number",parseRule:NumericParse,addReq:IsNextBase10NumericOrDecimal),
@@ -315,7 +371,7 @@ namespace NonStandard.Data {
 			"switch", "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe",
 			"ushort", "using", "virtual", "void", "volatile", "while"
 		};
-		public static Delim[] _DelimitersNone = new Delim[] { };
+		public static Delim[] None = new Delim[] { };
 		public static char[] WhitespaceDefault = new char[] { ' ', '\t', '\n', '\r' };
 		public static char[] WhitespaceNone = new char[] { };
 
@@ -334,7 +390,6 @@ namespace NonStandard.Data {
 	public class Context {
 		public static Dictionary<string, Context> allContexts = new Dictionary<string, Context>();
 		public static Context
-			Default = new Context("default"),
 			String = new Context("string"),
 			Char = new Context("char"),
 			Number = new Context("number"),
@@ -342,22 +397,39 @@ namespace NonStandard.Data {
 			Expression = new Context("()"),
 			SquareBrace = new Context("[]"),
 			GenericArgs = new Context("<>"),
+			CodeBody = new Context("{}"),
+			Sum = new Context("sum", Delim.None),
+			Difference = new Context("difference", Delim.None),
+			Product = new Context("product", Delim.None),
+			Quotient = new Context("quotient", Delim.None),
+			Modulus = new Context("modulus", Delim.None),
+			Power = new Context("power", Delim.None),
+			LogicalAnd = new Context("logical and", Delim.None),
+			LogicalOr = new Context("logical or", Delim.None),
+			Assignment = new Context("assignment", Delim.None),
+			Equal = new Context("equal", Delim.None),
+			LessThan = new Context("less than", Delim.None),
+			GreaterThan = new Context("greater than", Delim.None),
+			LessThanOrEqual = new Context("less than or equal", Delim.None),
+			GreaterThanOrEqual = new Context("greater than or equal", Delim.None),
+			NotEqual = new Context("not equal", Delim.None),
 			XmlCommentLine = new Context("///"),
 			CommentLine = new Context("//"),
 			CommentBlock = new Context("/**/"),
-			CodeBody = new Context("{}");
+			Default = new Context("default");
 		static Context() {
 			XmlCommentLine.delimiters = Delim.XmlCommentDelimiters;
 			CommentLine.delimiters = Delim.LineCommentDelimiters;
 			CommentBlock.delimiters = Delim.CommentBlockDelimiters;
+			CommentLine.whitespace = Delim.WhitespaceNone;
 			String.whitespace = Delim.WhitespaceNone;
 			String.delimiters = Delim.StringLiteralDelimiters;
 			Number.whitespace = Delim.WhitespaceNone;
-			//StringBuilder sb = new StringBuilder();
-			//for (int i = 0; i < Delim.StandardDelimiters.Length; ++i) {
-			//	sb.Append(Delim.StandardDelimiters[i].text+" "+ Delim.StandardDelimiters[i].description).Append("\n");
-			//}
-			//UnityEngine.Debug.Log(sb);
+			StringBuilder sb = new StringBuilder();
+			for (int i = 0; i < Delim.StandardDelimiters.Length; ++i) {
+				sb.Append(Delim.StandardDelimiters[i].text + " " + Delim.StandardDelimiters[i].description).Append("\n");
+			}
+			UnityEngine.Debug.Log(sb);
 		}
 		public string name = "default";
 		public char[] whitespace = Delim.WhitespaceDefault;
@@ -367,9 +439,12 @@ namespace NonStandard.Data {
 		/// data used to make delimiter searching very fast
 		/// </summary>
 		private char minDelim = char.MaxValue, maxDelim = char.MinValue; private int[] textLookup;
-		public Context(string name) {
+		public Context(string name, Delim[] defaultDelimiters = null) {
 			this.name = name;
 			allContexts[name] = this;
+			if(defaultDelimiters == null) {
+				delimiters = Delim.StandardDelimiters;
+			}
 		}
 		/// <summary>
 		/// set the delimiters of this Context, also calculating a simple lookup table
@@ -455,11 +530,11 @@ namespace NonStandard.Data {
 		}
 	}
 	class CodeParse {
-		public static int Tokens(string str, List<Token> tokens, List<int> rows = null, List<CodeConvert.Err> errors = null) {
+		public static int Tokens(string str, List<Token> tokens, List<int> rows = null, List<ParseError> errors = null) {
 			return Tokens(str, tokens, null, 0, rows, errors);
 		}
 		public static int Tokens(string str, List<Token> tokens, Context a_context = null,
-			int index = 0, List<int> rows = null, List<CodeConvert.Err> errors = null) {
+		int index = 0, List<int> rows = null, List<ParseError> errors = null) {
 			if (a_context == null) a_context = Context.Default;
 			int tokenBegin = -1, tokenEnd = -1;
 			List<Context.Entry> contextStack = new List<Context.Entry>();
@@ -469,10 +544,15 @@ namespace NonStandard.Data {
 				Delim delim = currentContext.GetDelimiterAt(str, index);
 				if (delim != null) {
 					Token delimToken = new Token(delim, index, delim.text.Length);
+					if(delim.text == "//") {
+						//UnityEngine.Debug.Log("@@@@@@@@@@@@"+delim.description+" "+delim.parseRule);
+					}
 					if (tokenBegin >= 0 && tokenEnd < 0) {
 						tokenEnd = index;
 						int len = tokenEnd - tokenBegin;
-						tokens.Add(new Token(str, tokenBegin, len));
+						if (len > 0) {
+							tokens.Add(new Token(str, tokenBegin, len));
+						}
 						tokenBegin = tokenEnd = -1;
 					}
 					if (delim.parseRule != null) {
@@ -493,6 +573,8 @@ namespace NonStandard.Data {
 					if (dcx != null) {
 						bool endProcessed = false;
 						if (contextStack.Count > 0 && dcx.Context == currentContext && dcx.isEnd) {
+							//UnityEngine.Debug.Log("@@@@@@@@@@@@ ending " + delim.description);
+
 							Context.Entry endingContext = contextStack[contextStack.Count - 1];
 							delimToken.meta = endingContext;
 							endingContext.tokenCount = (tokens.Count - endingContext.tokenStart) + 1;
@@ -538,7 +620,7 @@ namespace NonStandard.Data {
 				if (e != null && e.tokenCount < 0) {
 					e.tokenCount = tokens.Count - e.tokenStart;
 					if (e.context != Context.CommentLine) {
-						errors.Add(new CodeConvert.Err(tokens[i], rows, "missing closing token"));
+						errors.Add(new ParseError(tokens[i], rows, "missing closing token"));
 					}
 				}
 			}

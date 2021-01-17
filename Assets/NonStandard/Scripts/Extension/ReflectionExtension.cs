@@ -37,4 +37,7 @@ public static class GetSubClassesExtension{
 		}
 		return subTypes.ToArray();
 	}
+
+	public static object GetNewInstance(this Type t) { return Activator.CreateInstance(t); }
+
 }

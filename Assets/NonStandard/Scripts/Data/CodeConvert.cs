@@ -6,43 +6,31 @@ using System.Text;
 
 namespace NonStandard.Data {
 	public class CodeConvert {
-		public struct Err {
-			public int row, col;
-			public string message;
-			public Err(int r, int c, string m) { row = r; col = c; message = m; }
-			public Err(Token token, IList<int> rows, string m) {
-				CodeParse.FilePositionOf(token, rows, out row, out col);
-				message = m;
-			}
-			public override string ToString() { return "@" + row + "," + col + ": " + message; }
-			public static Err None = default(Err);
-			public void OffsetBy(Token token, IList<int> rows) {
-				int r, c; CodeParse.FilePositionOf(token, rows, out r, out c); row += r; col += c;
-			}
-		}
-		public static bool TryFill<T>(string text, ref T data, List<Err> errors = null) {
+		public static bool TryFill<T>(string text, ref T data, List<ParseError> errors = null) {
 			object value = data;
 			bool result = TryParse(typeof(T), text, ref value, errors);
 			data = (T)value;
 			return result;
 		}
-		public static bool TryParse<T>(string text, out T data, List<Err> errors = null) {
+		public static bool TryParse<T>(string text, out T data, List<ParseError> errors = null) {
 			object value = null;
 			bool result = TryParse(typeof(T), text, ref value, errors);
 			data = (T)value;
 			return result;
 		}
-		public static bool TryParse(Type type, string text, ref object data, List<Err> errors = null) {
+		public static bool TryParse(Type type, string text, ref object data, List<ParseError> errors = null) {
 			List<Token> tokens = new List<Token>();
 			List<int> rows = new List<int>();
 			CodeParse.Tokens(text, tokens, rows, errors);
-			//UnityEngine.Debug.Log(tokens.Join("] ["));
 			return TryParse(type, tokens, ref data, rows, errors);
 		}
-
-		public static T GetNew<T>(string type) { return (T)Activator.CreateInstance(Type.GetType(type)); }
-		public static object GetNew(Type t) { return Activator.CreateInstance(t); }
-
+		public static bool TryParse(Type type, IList<Token> tokens, ref object data, IList<int> rows, List<ParseError> errors = null) {
+			Parser p = new Parser();
+			p.Init(type, tokens, data, rows, errors);
+			bool result = p.TryParse();
+			data = p.result;
+			return result;
+		}
 		public class Parser {
 			/// current data being parsed
 			object memberValue = null;
@@ -60,11 +48,10 @@ namespace NonStandard.Data {
 			bool isVarPrimitiveType = false, isList;
 			List<object> listData = null;
 			Token memberToken;
-			//IDictionary dict;
 			KeyValuePair<Type, Type> dictionaryType;
 			IList<Token> tokens;
 			IList<int> rows;
-			List<Err> errors = null;
+			List<ParseError> errors = null;
 			int tokenIndex = 0;
 			public void SetResultType(Type type) {
 				resultType = type;
@@ -75,7 +62,7 @@ namespace NonStandard.Data {
 				fieldNames = Array.ConvertAll(fields, f => f.Name);
 				propNames = Array.ConvertAll(props, p => p.Name);
 			}
-			public void Init(Type type, IList<Token> a_tokens, object dataStructure, IList<int> rows, List<Err> errors) {
+			public void Init(Type type, IList<Token> a_tokens, object dataStructure, IList<int> rows, List<ParseError> errors) {
 				resultType = type;
 				tokens = a_tokens;
 				result = dataStructure;
@@ -86,24 +73,23 @@ namespace NonStandard.Data {
 				isVarPrimitiveType = false;
 				memberType = type.GetIListType();
 				isList = memberType != null;
-				memberToken.index = -1;
+				memberToken.Invalidate();
 				if (isList) {
 					isVarPrimitiveType = false;
 					if (memberType.IsArray) {
 					} else {
-						isVarPrimitiveType = IsPrimitiveType(memberType);
+						isVarPrimitiveType = IsConvertable(memberType);
 					}
 					listData = new List<object>();
 				} else {
 					try {
 						Type t = FindInternalType();
-						if (t == null && result == null) { result = GetNew(type); }
+						if (t == null && result == null) { result = type.GetNewInstance(); }
 					} catch (Exception e) {
 						throw new Exception("failed to create " + type + " at " +
 							CodeParse.FilePositionOf(tokens[0], rows) + "\n" + e.ToString());
 					}
 					dictionaryType = type.GetIDictionaryType();
-					//UnityEngine.Debug.Log(type + " ~ " + dictionaryType.Key + " : " + dictionaryType.Value);// +"    ["+dict+"]");
 					if (dictionaryType.Value != null) { memberType = dictionaryType.Value; }
 				}
 			}
@@ -132,14 +118,14 @@ namespace NonStandard.Data {
 						if (result == null || result.GetType() != t) {
 							if (t != null) {
 								SetResultType(t);
-								result = GetNew(resultType);
+								result = resultType.GetNewInstance();
 							} else {
-								if (errors != null) errors.Add(new Err(token, rows, "unknown type " + typeName));
+								if (errors != null) errors.Add(new ParseError(token, rows, "unknown type " + typeName));
 							}
 						}
 						return t;
 					} else {
-						if (errors != null) errors.Add(new Err(token, rows, "unexpected beginning token " + d.text));
+						if (errors != null) errors.Add(new ParseError(token, rows, "unexpected beginning token " + d.text));
 					}
 				}
 				return null;
@@ -149,23 +135,19 @@ namespace NonStandard.Data {
 				FindInternalType();
 				for (; tokenIndex < tokens.Count; ++tokenIndex) {
 					Token token = tokens[tokenIndex];
-					//Show.Log(":::" + token + "     " + dictionaryType.Key);
 					Context.Entry e = token.AsContextEntry;
 					if (e != null && (e.context == Context.CommentLine || e.context == Context.CommentBlock || e.context == Context.XmlCommentLine)) {
 						tokenIndex += e.tokenCount - 1; continue;
 					}
 					if (token.IsContextBeginning && !token.AsContextEntry.IsText) {
 						if (memberType != null && isVarPrimitiveType) {
-							if (errors != null) errors.Add(new Err(token, rows, "unexpected beginning of " + token.AsContextEntry.context.name));
+							if (errors != null) errors.Add(new ParseError(token, rows, "unexpected beginning of " + token.AsContextEntry.context.name));
 							return false;
 						}
 					}
-					if (token.IsContextEnding) {
-						//Console.Write("finished parsing " + token.ContextEntry.context.name);
-						break;
-					}
+					if (token.IsContextEnding) { break; }
 					if (!isList) {
-						if (memberToken.index < 0) {// memberType == null) {
+						if (!memberToken.IsValid) {
 							if (!GetMemberNameAndAssociatedType()) { return false; }
 							if (memberValue == tokens) { memberValue = null; continue; }
 						} else {
@@ -175,9 +157,8 @@ namespace NonStandard.Data {
 								MethodInfo addMethod = resultType.GetMethod("Add", new Type[] { dictionaryType.Key, dictionaryType.Value });
 								object key = memberToken.Resolve();
 								if (!memberType.IsAssignableFrom(memberValue.GetType())) {
-									if (errors != null) errors.Add(new Err(token, rows, "unable to convert element \"" + key + "\" value \"" + memberValue + "\" to type " + memberType));
+									if (errors != null) errors.Add(new ParseError(token, rows, "unable to convert element \"" + key + "\" value \"" + memberValue + "\" to type " + memberType));
 								} else {
-									//Show.Log(key + " = " + memberValue + " (" + memberValue.GetType() + " vs " + dictionaryType.Value + ")");
 									addMethod.Invoke(result, new object[] { key, memberValue });
 								}
 							} else if (field != null) {
@@ -187,7 +168,7 @@ namespace NonStandard.Data {
 							} else {
 								throw new Exception("huh? how did we get here?");
 							}
-							field = null; prop = null; memberType = dictionaryType.Value; memberToken.index = -1;
+							field = null; prop = null; memberType = dictionaryType.Value; memberToken.Invalidate();
 						}
 					} else {
 						if (!TryGetValue()) { return false; }
@@ -201,7 +182,7 @@ namespace NonStandard.Data {
 						for (int i = 0; i < listData.Count; ++i) { a.SetValue(listData[i], i); }
 						result = a;
 					} else {
-						result = GetNew(resultType);
+						result = resultType.GetNewInstance();
 						IList ilist = result as IList;
 						for (int i = 0; i < listData.Count; ++i) { ilist.Add(listData[i]); }
 					}
@@ -218,7 +199,7 @@ namespace NonStandard.Data {
 						if (e.IsText) {
 							str = e.Text;
 						} else {
-							if (errors != null) errors.Add(new Err(memberToken, rows, "unable to parse member name " + e.BeginToken + " for " + resultType));
+							if (errors != null) errors.Add(new ParseError(memberToken, rows, "unable to parse member name " + e.BeginToken + " for " + resultType));
 						}
 					} else {
 						str = "dictionary member value will be resolved later";
@@ -228,10 +209,7 @@ namespace NonStandard.Data {
 					str = memberToken.AsBasicToken;
 				}
 				if (str == null) { memberToken.index = -1; memberValue = tokens; return true; }
-				if (dictionaryType.Key != null) {
-					//UnityEngine.Debug.Log("dictionary member [" + memberToken + "]");
-					return true;
-				}
+				if (dictionaryType.Key != null) { return true; } // dictionary has no field to find
 				int index = FindIndexWithWildcard(fieldNames, str, true);
 				if (index < 0) {
 					index = FindIndexWithWildcard(propNames, str, true);
@@ -247,7 +225,7 @@ namespace NonStandard.Data {
 								if (i > 0 || fieldNames.Length > 0) sb.Append(", ");
 								sb.Append(propNames[i]);
 							}
-							errors.Add(new Err(memberToken, rows, "could not find field or property \"" + str + "\" in " + result.GetType() + sb));
+							errors.Add(new ParseError(memberToken, rows, "could not find field or property \"" + str + "\" in " + result.GetType() + sb));
 						}
 						return false;
 					} else {
@@ -262,7 +240,7 @@ namespace NonStandard.Data {
 				if (memberType.IsArray) {
 					isVarPrimitiveType = false;
 				} else {
-					isVarPrimitiveType = IsPrimitiveType(memberType);
+					isVarPrimitiveType = IsConvertable(memberType);
 				}
 				return true;
 			}
@@ -276,7 +254,7 @@ namespace NonStandard.Data {
 					// skip these delimiters as though they were whitespace.
 					case "=": case ":": case ",": break;
 					default:
-						if (errors != null) errors.Add(new Err(token, rows, "unexpected delimiter \"" + delim.text + "\""));
+						if (errors != null) errors.Add(new ParseError(token, rows, "unexpected delimiter \"" + delim.text + "\""));
 						return false;
 					}
 					memberValue = tokens;
@@ -297,7 +275,7 @@ namespace NonStandard.Data {
 				if (s != null) {
 					memberValue = token.ToString(s);
 					if (!TryConvert(ref memberValue, memberType)) {
-						if (errors != null) errors.Add(new Err(token, rows, "unable to convert " + memberValue + " to " + memberType));
+						if (errors != null) errors.Add(new ParseError(token, rows, "unable to convert (" + memberValue + ") to type '" + memberType+"'"));
 						return false;
 					}
 					return true;
@@ -306,25 +284,17 @@ namespace NonStandard.Data {
 				if (sub != null) {
 					memberValue = sub.value;
 					if (!TryConvert(ref memberValue, memberType)) {
-						if (errors != null) errors.Add(new Err(token, rows, "unable to convert " + memberValue + " to " + memberType));
+						if (errors != null) errors.Add(new ParseError(token, rows, "unable to convert substitution (" + memberValue + ") to type '" + memberType +"'"));
 						return false;
 					}
 					return true;
 				}
-				if (errors != null) errors.Add(new Err(token, rows, "unable to parse token with meta data " + meta));
+				if (errors != null) errors.Add(new ParseError(token, rows, "unable to parse token with meta data " + meta));
 				return false;
 			}
 		}
 
-		public static bool TryParse(Type type, IList<Token> tokens, ref object data, IList<int> rows, List<Err> errors = null) {
-			Parser p = new Parser();
-			p.Init(type, tokens, data, rows, errors);
-			bool result = p.TryParse();
-			data = p.result;
-			return result;
-		}
-
-		public static bool IsPrimitiveType(Type typeToGet) {
+		public static bool IsConvertable(Type typeToGet) {
 			switch (Type.GetTypeCode(typeToGet)) {
 			case TypeCode.Boolean:
 			case TypeCode.SByte:
@@ -341,14 +311,14 @@ namespace NonStandard.Data {
 			case TypeCode.String:
 				return true;
 			}
-			return false;
+			return typeToGet.IsEnum;
 		}
 
 		public static bool TryConvert(ref object value, Type typeToGet) {
 			try {
 				if (typeToGet.IsEnum) {
 					string str = value as string;
-					if (str != null) { return TryGetEnum(typeToGet, str, out value); }
+					if (str != null) { return TryGetWildcardEnum(typeToGet, str, out value); }
 				}
 				switch (Type.GetTypeCode(typeToGet)) {
 				case TypeCode.Boolean: value = Convert.ToBoolean(value); break;
@@ -370,7 +340,7 @@ namespace NonStandard.Data {
 			return true;
 		}
 
-		private static bool TryGetEnum(Type typeToGet, string str, out object value) {
+		public static bool TryGetWildcardEnum(Type typeToGet, string str, out object value) {
 			bool startsWith = str.EndsWith("*"), endsWidth = str.StartsWith("*");
 			if (startsWith || endsWidth) {
 				Array a = Enum.GetValues(typeToGet);

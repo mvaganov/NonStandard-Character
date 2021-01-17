@@ -15,7 +15,7 @@ namespace NonStandard.Data {
 
 		bool validating = false;
 		void OnValidate() {
-			List<CodeConvert.Err> errors = new List<CodeConvert.Err>();
+			List<ParseError> errors = new List<ParseError>();
 			CodeConvert.TryFill(values, ref dict, errors);
 			if (errors.Count > 0) {
 				parseResults = string.Join("\n", errors.ConvertAll(e => e.ToString()).ToArray());

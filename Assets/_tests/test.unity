@@ -419,7 +419,7 @@ MonoBehaviour:
   values: 'i-2f3testing12
 
     "3"-4.1'
-  parseResults: "{\n  i : -2,\n  f : 3,\n  testing : 12,\n  \"3\" : -4.1\n}"
+  parseResults: '@0,1: unable to convert i to System.Single'
 --- !u!1 &172256856
 GameObject:
   m_ObjectHideFlags: 0
@@ -994,7 +994,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1875188102}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -1109,8 +1109,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 2018154531}
   m_HandleRect: {fileID: 2018154530}
   m_Direction: 2
-  m_Value: 1
-  m_Size: 0
+  m_Value: 0
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -1533,6 +1533,10 @@ Prefab:
         type: 2}
       propertyPath: m_RootOrder
       value: 5
+      objectReference: {fileID: 0}
+    - target: {fileID: 1525450122027524, guid: 8d542b9fba148c245b1da48b5fd1ffb2, type: 2}
+      propertyPath: m_Name
+      value: player UI canvas
       objectReference: {fileID: 0}
     m_RemovedComponents:
     - {fileID: 114880779735251052, guid: 8d542b9fba148c245b1da48b5fd1ffb2, type: 2}
@@ -4084,6 +4088,7 @@ MonoBehaviour:
   dialogAsset: {fileID: 4900000, guid: 878f2bf5e3d11434f839d8cacc663944, type: 3}
   dialogs: []
   scrollRect: {fileID: 0}
+  errors: []
 --- !u!114 &1202952847
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -4954,8 +4959,8 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 1164979401}
   m_HandleRect: {fileID: 1164979400}
   m_Direction: 2
-  m_Value: 1
-  m_Size: 0
+  m_Value: 0
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:
@@ -5071,7 +5076,7 @@ MonoBehaviour:
   m_HandleRect: {fileID: 1585056157}
   m_Direction: 0
   m_Value: 0
-  m_Size: 0
+  m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
     m_PersistentCalls:

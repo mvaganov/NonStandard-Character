@@ -24,8 +24,9 @@ namespace NonStandard {
 			onMobileStart.Invoke();
 #endif
 		}
+		public void Quit() { Exit(); }
 
-		public void Quit() {
+		public static void Exit() {
 #if UNITY_EDITOR
 			UnityEditor.EditorApplication.isPlaying = false;
 #elif UNITY_WEBPLAYER
