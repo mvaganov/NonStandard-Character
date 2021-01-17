@@ -78,23 +78,27 @@ namespace NonStandard.Data {
 		private Context foundContext = null;
 		public string contextName;
 		public bool isStart, isEnd;
-		public DelimCtx(string delim, string name = null, string desc = null, Func<String, int, ParseResult> parseRule = null,
-			string ctx = null, bool s = false, bool e = false)
-			: base(delim, name, desc, parseRule) {
+		public DelimCtx(string delim, string name = null, string desc = null, Func<string, int, ParseResult> parseRule = null,
+			string ctx = null, bool s = false, bool e = false, Func<string, int, bool> addReq=null)
+			: base(delim, name, desc, parseRule, addReq) {
 			contextName = ctx; isStart = s; isEnd = e;
 		}
 	}
 	public class Delim : IComparable<Delim> {
 		public string text, name, description;
 		public Func<string, int, ParseResult> parseRule = null;
-		public Delim(string delim, string name = null, string desc = null, Func<string, int, ParseResult> parseRule = null) {
-			this.text = delim; this.name = name; description = desc; this.parseRule = parseRule;
+		public Func<string, int, bool> addedRequirement = null;
+		public Delim(string delim, string name = null, string desc = null, 
+			Func<string, int, ParseResult> parseRule = null,
+			Func<string, int, bool> addReq = null) {
+			text = delim; this.name = name; description = desc; this.parseRule = parseRule; addedRequirement = addReq;
 		}
 		public bool IsAt(string str, int index) {
 			if (index + text.Length > str.Length) { return false; }
 			for (int i = 0; i < text.Length; ++i) {
 				if (text[i] != str[index + i]) return false;
 			}
+			if(addedRequirement != null) { return addedRequirement.Invoke(str, index); }
 			return true;
 		}
 		public override string ToString() { return text; }
@@ -109,7 +113,11 @@ namespace NonStandard.Data {
 		public int CompareTo(Delim other) {
 			int len = Math.Min(text.Length, other.text.Length);
 			for (int i = 0; i < len; ++i) { int comp = text[i] - other.text[i]; if (comp != 0) return comp; }
-			return (text.Length > other.text.Length) ? -1 : (text.Length < other.text.Length) ? 1 : 0;
+			if (text.Length > other.text.Length) return -1;
+			if (text.Length < other.text.Length) return 1;
+			if (addedRequirement != null && other.addedRequirement == null) return -1;
+			if (addedRequirement == null && other.addedRequirement != null) return 1;
+			return 0;
 		}
 		public static ParseResult HexadecimalParse(string str, int index) {
 			return NumberParse(str, index + 2, 16, false);
@@ -119,6 +127,15 @@ namespace NonStandard.Data {
 		}
 		public static ParseResult IntegerParse(string str, int index) {
 			return NumberParse(str, index, 10, false);
+		}
+		public static bool IsNextBase10NumericOrDecimal(string str, int index) {
+			if (index < -1 || index + 1 >= str.Length) return false;
+			char c = str[index+1]; if (c == '.') return true;
+			int i = NumericValue(c); return (i >= 0 && i <= 9);
+		}
+		public static bool IsNextBase10Numeric(string str, int index) {
+			if (index < -1 || index + 1 >= str.Length) return false;
+			int i = NumericValue(str[index + 1]); return (i >= 0 && i <= 9);
 		}
 		public static int NumericValue(char c) {
 			if (c >= '0' && c <= '9') return c - '0';
@@ -130,39 +147,62 @@ namespace NonStandard.Data {
 			int h = NumericValue(c);
 			return h >= 0 && h < numberBase;
 		}
-		public static int CountDigitsAt(string str, int index, int numberBase) {
+		public static int CountNumericCharactersAt(string str, int index, int numberBase, bool includeNegativeSign, bool includeDecimal) {
 			int numDigits = 0;
-			while (index + numDigits < str.Length && IsValidNumber(str[index + numDigits], numberBase)) { numDigits++; }
+			bool foundDecimal = false;
+			while (index + numDigits < str.Length){
+				char c = str[index + numDigits];
+				bool stillGood = false;
+				if (IsValidNumber(c, numberBase)) {
+					stillGood = true;
+				} else {
+					if(includeNegativeSign && numDigits == 0 && c == '-') {
+						stillGood = true;
+					} else if(includeDecimal && c == '.' && !foundDecimal) {
+						foundDecimal = true;
+						stillGood = true;
+					}
+				}
+				if (stillGood) { numDigits++; } else break;
+			}
 			return numDigits;
 		}
 		public static ParseResult NumberParse(string str, int index, int numberBase, bool includeDecimal) {
-			return NumberParse(str, index, CountDigitsAt(str, index, numberBase), numberBase, includeDecimal);
+			return NumberParse(str, index, CountNumericCharactersAt(str, index, numberBase, true, true), numberBase, includeDecimal);
 		}
-		public static ParseResult NumberParse(string str, int index, int numDigits, int numberBase, bool includeDecimal) {
+		public static ParseResult NumberParse(string str, int index, int characterCount, int numberBase, bool includeDecimal) {
 			ParseResult pr = new ParseResult(0, null);
 			long sum = 0;
-			int b = 1, onesPlace = index + numDigits - 1;
-			for (int i = 0; i < numDigits; ++i) {
-				sum += NumericValue(str[onesPlace - i]) * b;
-				b *= numberBase;
-			}
-			pr.replacementValue = (sum < int.MaxValue) ? (int)sum : sum;
-			pr.lengthParsed = numDigits;
-			double fraction = 0;
-			int numFractionDigits = 0;
-			if (includeDecimal && index + numDigits + 1 < str.Length && str[index + numDigits] == '.') {
-				int frac = onesPlace + 2;
-				while (frac + numFractionDigits < str.Length &&
-					IsValidNumber(str[frac + numFractionDigits], numberBase)) { numFractionDigits++; }
-				if (numFractionDigits == 0) { pr.SetError("decimal point with no subsequent digits", 0, index); }
-				b = numberBase;
-				for (int i = 0; i < numFractionDigits; ++i) {
-					fraction += NumericValue(str[frac + i]) / (double)b;
+			char c = str[index];
+			bool isNegative = c == '-';
+			if (isNegative) { ++index; }
+			bool isDecimal = c == '.';
+			int numDigits;
+			if (!isDecimal) {
+				numDigits = CountNumericCharactersAt(str, index, numberBase, false, false);
+				int b = 1, onesPlace = index + numDigits - 1;
+				for (int i = 0; i < numDigits; ++i) {
+					sum += NumericValue(str[onesPlace - i]) * b;
 					b *= numberBase;
 				}
-				pr.replacementValue = (fraction + sum);
-				pr.lengthParsed = numDigits + 1 + numFractionDigits;
+				if (isNegative) sum *= -1;
+				pr.replacementValue = (sum < int.MaxValue) ? (int)sum : sum;
+				index += numDigits;
 			}
+			++index;
+			double fraction = 0;
+			if (includeDecimal && index < str.Length && str[index -1] == '.') {
+				numDigits = CountNumericCharactersAt(str, index, numberBase, false, false);
+				if (numDigits == 0) { pr.SetError("decimal point with no subsequent digits", 0, index); }
+				long b = numberBase;
+				for (int i = 0; i < numDigits; ++i) {
+					fraction += NumericValue(str[index + i]) / (double)b;
+					b *= numberBase;
+				}
+				if (isNegative) fraction *= -1;
+				pr.replacementValue = (sum + fraction);
+			}
+			pr.lengthParsed = characterCount;
 			return pr;
 		}
 		public static ParseResult CommentEscape(string str, int index) { return UnescapeString(str, index); }
@@ -195,14 +235,7 @@ namespace NonStandard.Data {
 			case 'x': return NumberParse(str, index + 2, 2, 16, false).AddToLength(2).ForceCharSubstitute();
 			case 'u': return NumberParse(str, index + 2, 4, 16, false).AddToLength(2).ForceCharSubstitute();
 			case 'U': return NumberParse(str, index + 2, 8, 16, false).AddToLength(2).ForceCharSubstitute();
-			case '0':
-			case '1':
-			case '2':
-			case '3':
-			case '4':
-			case '5':
-			case '6':
-			case '7': {
+			case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': {
 				int digitCount = 1;
 				do {
 					if (str.Length <= index + digitCount + 1) break;
@@ -251,6 +284,8 @@ namespace NonStandard.Data {
 		public static Delim[] _math_operator = new Delim[] { "+", "-", "*", "/", "%" };
 		public static Delim[] _hex_number_prefix = new Delim[] { new DelimCtx("0x", ctx: "0x", parseRule: HexadecimalParse) };
 		public static Delim[] _number = new Delim[] {
+			new DelimCtx("-",ctx:"number",parseRule:NumericParse,addReq:IsNextBase10NumericOrDecimal),
+			new DelimCtx(".",ctx:"number",parseRule:NumericParse,addReq:IsNextBase10Numeric),
 			new DelimCtx("0",ctx:"number",parseRule:NumericParse),
 			new DelimCtx("1",ctx:"number",parseRule:NumericParse),
 			new DelimCtx("2",ctx:"number",parseRule:NumericParse),
@@ -319,8 +354,8 @@ namespace NonStandard.Data {
 			String.delimiters = Delim.StringLiteralDelimiters;
 			Number.whitespace = Delim.WhitespaceNone;
 			//StringBuilder sb = new StringBuilder();
-			//for(int i = 0; i < Delim.StandardDelimiters.Length; ++i) {
-			//	sb.Append(Delim.StandardDelimiters[i].text).Append("\n");
+			//for (int i = 0; i < Delim.StandardDelimiters.Length; ++i) {
+			//	sb.Append(Delim.StandardDelimiters[i].text+" "+ Delim.StandardDelimiters[i].description).Append("\n");
 			//}
 			//UnityEngine.Debug.Log(sb);
 		}

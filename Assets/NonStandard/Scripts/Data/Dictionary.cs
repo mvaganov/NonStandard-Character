@@ -16,11 +16,12 @@ namespace NonStandard.Data {
 		bool validating = false;
 		void OnValidate() {
 			List<CodeConvert.Err> errors = new List<CodeConvert.Err>();
-			CodeConvert.TryParse(values, out dict, errors);
+			CodeConvert.TryFill(values, ref dict, errors);
 			if (errors.Count > 0) {
 				parseResults = string.Join("\n", errors.ConvertAll(e => e.ToString()).ToArray());
 			} else {
-				parseResults = dict.Show(true);
+				//parseResults = dict.Show(true);
+				parseResults = Show.Stringify(dict, true);
 			}
 		}
 		void ShowChange() {
@@ -39,7 +40,8 @@ namespace NonStandard.Data {
 		void Start() {
 			#if UNITY_EDITOR
 			dict.onChange += (k, a, b) => { ShowChange(); };
-			#endif
+#endif
+			dict.FunctionAssignIgnore();
 			string[] mainStats = new string[] { "str", "con", "dex", "int", "wis", "cha" };
 			int[] scores = { 8, 8, 18, 12, 9, 14 };
 			for(int i = 0; i < mainStats.Length; ++i) {

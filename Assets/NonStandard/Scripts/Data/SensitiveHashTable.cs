@@ -17,6 +17,11 @@ namespace NonStandard.Data {
 		public const int defaultBuckets = 8;
 		public List<KV> orderedPairs = new List<KV>();
 		public Action<KEY, VAL, VAL> onChange;
+		public enum ResultOfAssigningToFunction { ThrowException, Ignore, OverwriteFunction }
+		public ResultOfAssigningToFunction onAssignmentToFunction = ResultOfAssigningToFunction.ThrowException;
+		public void FunctionAssignIgnore() { onAssignmentToFunction = ResultOfAssigningToFunction.Ignore; }
+		public void FunctionAssignException() { onAssignmentToFunction = ResultOfAssigningToFunction.ThrowException; }
+		public void FunctionAssignOverwrite() { onAssignmentToFunction = ResultOfAssigningToFunction.OverwriteFunction; }
 		int Hash(KEY key) { return Math.Abs(hFunc != null ? hFunc(key) : key.GetHashCode()); }
 		[Serializable] public class KV {
 			public int hash;
@@ -70,11 +75,16 @@ namespace NonStandard.Data {
 				}
 				set {
 					if (calc != null) {
-						string errorMessage = "cant se't " + key + ", this value is calculated.";
-						if(reliesOn != null) {
-							errorMessage += " relies on: " + string.Join(", ", reliesOn.ConvertAll(kv => kv.key.ToString()).ToArray());
+						switch (parent.onAssignmentToFunction) {
+						case ResultOfAssigningToFunction.ThrowException:
+							string errorMessage = "can't set " + key + ", this value is calculated.";
+							if (reliesOn != null) {
+								errorMessage += " relies on: " + string.Join(", ", reliesOn.ConvertAll(kv => kv.key.ToString()).ToArray());
+							}
+							throw new Exception(errorMessage);
+						case ResultOfAssigningToFunction.Ignore: return;
+						case ResultOfAssigningToFunction.OverwriteFunction: calc = null; break;
 						}
-						throw new Exception(errorMessage);
 					}
 					SetInternal(value);
 				}

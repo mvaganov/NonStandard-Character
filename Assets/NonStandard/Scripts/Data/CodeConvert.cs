@@ -20,6 +20,12 @@ namespace NonStandard.Data {
 				int r, c; CodeParse.FilePositionOf(token, rows, out r, out c); row += r; col += c;
 			}
 		}
+		public static bool TryFill<T>(string text, ref T data, List<Err> errors = null) {
+			object value = data;
+			bool result = TryParse(typeof(T), text, ref value, errors);
+			data = (T)value;
+			return result;
+		}
 		public static bool TryParse<T>(string text, out T data, List<Err> errors = null) {
 			object value = null;
 			bool result = TryParse(typeof(T), text, ref value, errors);
@@ -30,6 +36,7 @@ namespace NonStandard.Data {
 			List<Token> tokens = new List<Token>();
 			List<int> rows = new List<int>();
 			CodeParse.Tokens(text, tokens, rows, errors);
+			//UnityEngine.Debug.Log(tokens.Join("] ["));
 			return TryParse(type, tokens, ref data, rows, errors);
 		}
 

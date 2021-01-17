@@ -46,7 +46,8 @@ namespace NonStandard {
 		/// <param name="depth"></param>
 		/// <param name="recursionStack">used to prevent recursion stack overflows</param>
 		/// <returns></returns>
-		public static string Stringify(object obj, bool pretty = false, bool includeType = true, int depth = 0, List<object> recursionStack = null) {
+		public static string Stringify(object obj, bool pretty = false, bool includeType = true,
+			int depth = 0, List<object> recursionStack = null) {
 			if (obj == null) return "null";
 			Type t = obj.GetType();
 			StringBuilder sb = new StringBuilder();
@@ -59,7 +60,11 @@ namespace NonStandard {
 			string s = obj as string;
 			if (s != null || t.IsPrimitive || t.IsEnum) {
 				if (s != null) {
-					sb.Append("\"").Append(Escape(s)).Append("\"");
+					if (!IsPrintableWithoutEscape(s)) { // needs escape
+						sb.Append("\"").Append(Escape(s)).Append("\"");
+					} else {
+						sb.Append(s);
+					}
 				} else {
 					sb.Append(obj.ToString());
 				}
@@ -95,7 +100,9 @@ namespace NonStandard {
 				}
 				sb.Append("]");
 			} else {
-				bool isDict = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>);
+				KeyValuePair<Type, Type> dType = t.GetIDictionaryType();
+				bool isDict = dType.Key != null;//t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>);
+				showTypeHere &= !isDict;
 				sb.Append("{");
 				if (showTypeHere) {
 					if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
@@ -111,10 +118,10 @@ namespace NonStandard {
 						sb.Append(Stringify(fi[i].GetValue(obj), pretty, includeType, depth + 1, recursionStack));
 					}
 				} else {
-					MethodInfo getEnum = t.GetMethod("GetEnumerator", new Type[] { });
+					MethodInfo getEnumerator = t.GetMethod("GetEnumerator", new Type[] { });
 					MethodInfo getKey = null, getVal = null;
 					object[] noparams = new object[] { };
-					IEnumerator e = getEnum.Invoke(obj, noparams) as IEnumerator;
+					IEnumerator e = getEnumerator.Invoke(obj, noparams) as IEnumerator;
 					bool somethingPrinted = false;
 					while (e.MoveNext()) {
 						object o = e.Current;
@@ -124,7 +131,8 @@ namespace NonStandard {
 						if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
 						object k = getKey.Invoke(o, noparams);
 						object v = getVal.Invoke(o, noparams);
-						sb.Append(k);
+						string keyString = Stringify(k, pretty, includeType, depth + 1, recursionStack);
+						sb.Append(keyString);
 						sb.Append(pretty ? " : " : ":");
 						sb.Append(Stringify(v, pretty, includeType, depth + 1, recursionStack));
 						somethingPrinted = true;
@@ -136,7 +144,23 @@ namespace NonStandard {
 			if (sb.Length == 0) { sb.Append(obj.ToString()); }
 			return sb.ToString();
 		}
-
+		private static Dictionary<string, bool> protectedKeywords = new Dictionary<string, bool>() {
+			{ "null", true }, { "true", true }, { "false", true }, {"undefined", true}
+		};
+		public static bool IsPrintableWithoutEscape(string s) {
+			for(int i = 0; i < s.Length; ++i) {
+				char c = s[i];
+				switch (s[i]) {
+				case '\'': case '\"': case '(': case ')': case ',': case '\\': case ':': case ';': case '{': case '}':
+				case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
+					return false;
+				}
+				if (c <= 32 || c >= 127) return false;
+			}
+			bool v;
+			if(protectedKeywords.TryGetValue(s, out v)) { return false; }
+			return true;
+		}
 		/// <summary>
 		/// converts a string from it's code to it's compiled form, with processed escape sequences
 		/// </summary>
