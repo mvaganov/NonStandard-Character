@@ -4,6 +4,7 @@ using NonStandard.Data;
 using System;
 using UnityEngine.UI;
 using NonStandard;
+using NonStandard.Data.Parse;
 
 [Serializable] public class Dialog {
 	public string name;

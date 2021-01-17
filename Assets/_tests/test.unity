@@ -416,10 +416,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dict:
     onAssignmentToFunction: 0
-  values: 'i-2f3testing12
-
-    "3"-4.1'
-  parseResults: '@0,1: unable to convert i to System.Single'
+  values: i-2 f3testing12"3"-2.99
+  parseResults: "{\n  i : -2,\n  f : 3,\n  testing : 12,\n  \"3\" : -2.99\n}"
 --- !u!1 &172256856
 GameObject:
   m_ObjectHideFlags: 0

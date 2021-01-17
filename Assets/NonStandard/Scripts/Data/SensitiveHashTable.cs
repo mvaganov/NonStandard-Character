@@ -109,17 +109,13 @@ namespace NonStandard.Data {
 					sb.Append(" /*");
 					if (showDependencies) {
 						sb.Append(" relies on: ");
-						for(int i = 0; i < reliesOn.Count; ++i) {
-							if(i>0) sb.Append(", ");
-							sb.Append(reliesOn[i].key);
-						}
+						reliesOn.Join(sb, ", ", r=>r.key.ToString());
+						//for(int i = 0; i < reliesOn.Count; ++i) { if(i>0) sb.Append(", "); sb.Append(reliesOn[i].key); }
 					}
 					if (showDependents) {
 						sb.Append(" dependents: ");
-						for (int i = 0; i < dependents.Count; ++i) {
-							if (i > 0) sb.Append(", ");
-							sb.Append(dependents[i].key);
-						}
+						dependents.Join(sb, ", ", d => d.key.ToString());
+						//for (int i = 0; i < dependents.Count; ++i) { if (i > 0) sb.Append(", "); sb.Append(dependents[i].key); }
 					}
 					sb.Append(" */");
 				}
@@ -264,15 +260,14 @@ namespace NonStandard.Data {
 			return false;
 		}
 		public bool TryGetValue(KEY key, out VAL value) {
-			KV found;
-			if (TryGet(key, out found)) { value = found.val; return true; }
-			value = default(VAL);
-			return false;
+			KV found; if (TryGet(key, out found)) { value = found.val; return true; }
+			value = default(VAL); return false;
 		}
 		public void Add(KeyValuePair<KEY, VAL> item) { Set(Kv(item.Key, item.Value)); }
 		public void Clear() {
 			if (buckets == null) return;
 			for (int i = 0; i < buckets.Count; ++i) { if(buckets[i] != null) buckets[i].Clear(); }
+			orderedPairs.Clear();
 		}
 		public bool Contains(KeyValuePair<KEY, VAL> item) {
 			List<KV> bucket; int bestIndex;
@@ -281,14 +276,7 @@ namespace NonStandard.Data {
 		}
 		public void CopyTo(KeyValuePair<KEY, VAL>[] array, int arrayIndex) {
 			int index = arrayIndex;
-			for (int b = 0; b < buckets.Count; ++b) {
-				List<KV> bucket = buckets[b];
-				if (bucket != null) {
-					for (int i = 0; i < bucket.Count; ++i) {
-						array[index++] = bucket[i];
-					}
-				}
-			}
+			for (int i = 0; i < orderedPairs.Count; ++i) { array[index++] = orderedPairs[i]; }
 		}
 		public bool Remove(KeyValuePair<KEY, VAL> item) {
 			List<KV> bucket; int bestIndex;
@@ -304,7 +292,7 @@ namespace NonStandard.Data {
 		IEnumerator IEnumerable.GetEnumerator() { return new Enumerator(this); }
 		public class Enumerator : IEnumerator<KeyValuePair<KEY, VAL>> {
 			SensitiveHashTable<KEY, VAL> htable;
-			int index = -1;
+			int index = -1; // MoveNext() is always called before the enumeration begins
 			public Enumerator(SensitiveHashTable<KEY, VAL> htable) { this.htable = htable; }
 			public KeyValuePair<KEY, VAL> Current { get { return htable.orderedPairs[index]; } }
 			object IEnumerator.Current { get { return Current; } }
@@ -313,7 +301,7 @@ namespace NonStandard.Data {
 				if (htable.orderedPairs == null || index >= htable.orderedPairs.Count) return false;
 				return ++index < htable.orderedPairs.Count;
 			}
-			public void Reset() { index = 0; }
+			public void Reset() { index = -1; }
 		}
 	}
 }

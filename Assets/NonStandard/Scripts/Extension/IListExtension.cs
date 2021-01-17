@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Text;
 
 public static class IListExtension {
 	public static Int32 BinarySearchIndexOf<T>(this IList<T> list, T value, IComparer<T> comparer = null) {
@@ -32,5 +33,15 @@ public static class IListExtension {
 			strings[i] = toString.Invoke(source[i]);
 		}
 		return string.Join(separator, strings);
+	}
+	public static void Join<T>(this IList<T> source, StringBuilder sb, string separator, Func<T, string> toString = null) {
+		if (toString == null) { toString = o => o.ToString(); }
+		bool somethingPrinted = false;
+		for (int i = 0; i < source.Count; ++i) {
+			if (source[i] != null) {
+				if (somethingPrinted) sb.Append(separator);
+				sb.Append(toString.Invoke(source[i]));
+			}
+		}
 	}
 }
