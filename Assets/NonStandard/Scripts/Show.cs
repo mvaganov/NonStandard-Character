@@ -109,7 +109,8 @@ namespace NonStandard {
 				if (pretty) { sb.Append("\n" + Indent(depth)); }
 				sb.Append("]");
 			} else {
-				bool isDict = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>);
+				KeyValuePair<Type, Type> kvp = t.GetIDictionaryType();
+				bool isDict = kvp.Key != null;
 				sb.Append("{");
 				if (showTypeHere) {
 					if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
