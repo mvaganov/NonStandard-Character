@@ -6,67 +6,101 @@ using System.Text;
 
 namespace NonStandard.Data.Parse {
 	public class Parser {
+		/// used by wildcard searches, for member names and enums. dramatically reduces structural typing
+		public const char Wildcard = '¤';
 		/// current data being parsed
-		object memberValue = null;
+		protected object memberValue = null;
 		/// the object being parsed into, the final result
-		public object result;
+		public object result { get; protected set; }
+		public object scope;
 		/// the type that the result needs to be
-		Type resultType;
+		protected Type resultType;
 		/// the type that the next value needs to be
-		Type memberType = null;
+		protected Type memberType = null;
 		// parse state
-		int tokenIndex = 0;
-		IList<Token> tokens;
-		Token memberToken;
-		IList<int> rows;
-		List<ParseError> errors = null;
-		bool isVarPrimitiveType = false, isList;
-		// for parsing an object
-		string[] fieldNames, propNames;
-		FieldInfo[] fields;
-		FieldInfo field = null;
-		PropertyInfo[] props;
-		PropertyInfo prop = null;
+		public class ParseState {
+			public int tokenIndex = 0;
+			public List<Token> tokens;
+			public Token GetToken() { return tokens[tokenIndex]; }
+		}
+		protected List<ParseState> state = new List<ParseState>();
+		protected Tokenizer tok;
 		// for parsing a list
-		List<object> listData = null;
+		protected List<object> listData = null;
+		// for objects and dictionaries
+		protected object memberId;
+		protected Token memberToken;
+		// for parsing an object
+		protected MemberReflectionTable reflectTable = new MemberReflectionTable();
+		protected FieldInfo field = null;
+		protected PropertyInfo prop = null;
 		// for parsing a dictionary
-		KeyValuePair<Type, Type> dictionaryTypes;
-		private MethodInfo dictionaryAdd = null;
+		protected KeyValuePair<Type, Type> dictionaryTypes;
+		protected MethodInfo dictionaryAdd = null;
+
+		protected ParseState Current { get { return state[state.Count - 1]; } }
+		protected void AddParseState(List<Token> tokenList, int index = 0) {
+			state.Add(new ParseState { tokens = tokenList, tokenIndex = index });
+		}
+		protected bool Increment() {
+			if (state.Count <= 0) return false;
+			ParseState pstate = state[state.Count - 1];
+			//Show.Warning(pstate.GetToken());
+			++pstate.tokenIndex;
+			while (pstate.tokenIndex >= pstate.tokens.Count) {
+				state.RemoveAt(state.Count - 1);
+				if (state.Count <= 0) return false;
+				pstate = state[state.Count - 1];
+				++pstate.tokenIndex;
+			}
+			return true;
+		}
+		protected bool SkipComments(bool incrementAtLeastOnce = false) {
+			Context.Entry e = incrementAtLeastOnce ? Context.Entry.None : null;
+			do {
+				if (e != null && !Increment()) return false;
+				e = Current.GetToken().GetAsContextEntry();
+			} while (e != null && e.IsComment());
+			return true;
+		}
+
 		public void SetResultType(Type type) {
 			resultType = type;
-			fields = type.GetFields();
-			props = type.GetProperties();
-			Array.Sort(fields, (a, b) => a.Name.CompareTo(b.Name));
-			Array.Sort(props, (a, b) => a.Name.CompareTo(b.Name));
-			fieldNames = Array.ConvertAll(fields, f => f.Name);
-			propNames = Array.ConvertAll(props, p => p.Name);
+			reflectTable.SetType(type);
 		}
-		public void Init(Type type, IList<Token> a_tokens, object dataStructure, IList<int> rows, List<ParseError> errors) {
+		protected Type SetResultType(string typeName) {
+			Type t = Type.GetType(typeName);
+			if (t == null) {
+				Type[] childTypes = resultType.GetSubClasses();
+				string[] typeNames = Array.ConvertAll(childTypes, ty => ty.ToString());
+				string nameSearch = typeName[0]!=(Parser.Wildcard) ? Parser.Wildcard + typeName : typeName;
+				int index = FindIndexWithWildcard(typeNames, nameSearch, false);
+				if (index >= 0) { t = childTypes[index]; }
+			}
+			if (t != null && (result == null || result.GetType() != t)) {
+				SetResultType(t);
+				result = resultType.GetNewInstance();
+			}
+			return t;
+		}
+		public bool Init(Type type, List<Token> tokens, object dataStructure, Tokenizer tokenizer, object scope) {
 			resultType = type;
-			tokens = a_tokens;
+			tok = tokenizer;
+			state.Clear();
+			AddParseState(tokens);
 			result = dataStructure;
-			this.rows = rows;
-			this.errors = errors;
 			SetResultType(type);
-			memberType = null;
-			isVarPrimitiveType = false;
 			memberType = type.GetIListType();
-			isList = memberType != null;
 			memberToken.Invalidate();
-			if (isList) {
-				isVarPrimitiveType = false;
-				if (memberType.IsArray) {
-				} else {
-					isVarPrimitiveType = CodeConvert.IsConvertable(memberType);
-				}
+			this.scope = scope;
+			if (memberType != null) {
 				listData = new List<object>();
 			} else {
 				try {
-					Type t = FindInternalType();
-					if (t == null && result == null) { result = type.GetNewInstance(); }
+					if (result == null && !resultType.IsAbstract) { result = type.GetNewInstance(); }
 				} catch (Exception e) {
-					throw new Exception("failed to create " + type + " at " +
-						ParseError.FilePositionOf(tokens[0], rows) + "\n" + e.ToString());
+					AddError("failed to create " + type + "\n" + e.ToString());
+					return false;
 				}
 				dictionaryTypes = type.GetIDictionaryType();
 				if (dictionaryTypes.Value != null) {
@@ -74,94 +108,68 @@ namespace NonStandard.Data.Parse {
 					dictionaryAdd = resultType.GetMethod("Add", new Type[] { dictionaryTypes.Key, dictionaryTypes.Value });
 				}
 			}
+			return true;
 		}
 
-		private Type FindInternalType() {
-			if (tokenIndex >= tokens.Count) return null;
-			Token token = tokens[tokenIndex];
-			if (token.IsContextBeginning) { token = tokens[++tokenIndex]; }
-			Delim d = token.AsDelimiter;
+		protected Type FindInternalType() {
+			if (Current.tokenIndex >= Current.tokens.Count) return null;
+			if (!SkipComments()) { AddError("failed skipping comment for initial type"); return null; }
+			Token token = Current.GetToken();
+			Delim d = token.GetAsDelimiter();
 			if (d != null) {
 				if (d.text == "=" || d.text == ":") {
-					++tokenIndex;
+					SkipComments(true);
 					memberType = typeof(string);
 					if (!TryGetValue()) { return null; }
 					memberType = null;
-					++tokenIndex;
+					SkipComments(true);
 					string typeName = memberValue.ToString();
-					Type t = Type.GetType(typeName);
-					if (t == null) {
-						Type[] childTypes = resultType.GetSubClasses();
-						string[] typeNames = Array.ConvertAll(childTypes, ty => ty.ToString());
-						string nameSearch = !typeName.StartsWith("*") ? "*" + typeName : typeName;
-						int index = FindIndexWithWildcard(typeNames, nameSearch, false);
-						if (index >= 0) { t = childTypes[index]; }
-					}
-					if (result == null || result.GetType() != t) {
-						if (t != null) {
-							SetResultType(t);
-							result = resultType.GetNewInstance();
-						} else {
-							if (errors != null) errors.Add(new ParseError(token, rows, "unknown type " + typeName));
-						}
-					}
+					Type t = SetResultType(typeName);
+					//Show.Log("internal type " + typeName + " (" + typeName + ")");
+					if (t == null) { AddError("unknown type " + typeName); }
 					return t;
 				} else {
-					if (errors != null) errors.Add(new ParseError(token, rows, "unexpected beginning token " + d.text));
+					AddError("unexpected beginning token " + d.text);
 				}
 			}
 			return null;
 		}
 
 		public bool TryParse() {
-			FindInternalType();
-			for (; tokenIndex < tokens.Count; ++tokenIndex) {
-				Token token = tokens[tokenIndex];
-				Context.Entry e = token.AsContextEntry;
-				// skip comments
-				if (e != null && (e.context == CodeRules.CommentLine || e.context == CodeRules.CommentBlock || e.context == CodeRules.XmlCommentLine)) {
-					tokenIndex += e.tokenCount - 1; // -1 because of the automatic increment in the for loop
-					continue;
-				}
-				// flag errors for complicated text when a primitive is expected TODO expressions.
-				if (token.IsContextBeginning && !token.AsContextEntry.IsText) {
-					if (memberType != null && isVarPrimitiveType) {
-						if (errors != null) errors.Add(new ParseError(token, rows, "unexpected beginning of " + token.AsContextEntry.context.name));
-						return false;
-					}
-				}
-				if (token.IsContextEnding) { break; } // assume any unexpected context ending belongs to this context
-				if (!isList) {
-					// how to parse non-lists: find what member is being assigned, get the value to assign, assign it.
+			Token token = Current.GetToken();
+			Context.Entry e = token.GetAsContextEntry();
+			if(e != null && e.tokens == Current.tokens) { Increment(); } // skip past the opening bracket
+			FindInternalType(); // first, check if this has a more correct internal type defined
+			if (result == null && listData == null) {
+				AddError("need specific " + resultType + ", eg: \"" +resultType.GetSubClasses().Join("\", \"")+"\"");
+				return false;
+			}
+			if (!SkipComments()) { return true; }
+			while (state.Count > 0 && Current.tokenIndex < Current.tokens.Count) {
+				token = Current.GetToken();
+				e = token.GetAsContextEntry();
+				if(e != null && e.tokens == Current.tokens) {
+					if (!token.IsContextEnding()) { AddError("unexpected state. we should never see this. ever."); }
+					break;
+				} // found the closing bracket!
+				if (listData == null) {
 					if (!memberToken.IsValid) {
 						if (!GetMemberNameAndAssociatedType()) { return false; }
-						if (memberValue == tokens) { memberValue = null; continue; }
 					} else {
 						if (!TryGetValue()) { return false; }
-						if (memberValue == tokens) { continue; } // this is how TryGetValue communicates value ignore
-						if (dictionaryAdd != null) {
-							object key = memberToken.Resolve();
-							if (!memberType.IsAssignableFrom(memberValue.GetType())) {
-								if (errors != null) errors.Add(new ParseError(token, rows, "unable to convert element \"" + key + "\" value \"" + memberValue + "\" to type " + memberType));
-							} else {
-								dictionaryAdd.Invoke(result, new object[] { key, memberValue });
-							}
-						} else if (field != null) {
-							field.SetValue(result, memberValue);
-						} else if (prop != null) {
-							prop.SetValue(result, memberValue, null);
-						} else {
-							throw new Exception("huh? how did we get here?");
-						}
-						field = null; prop = null; memberType = dictionaryTypes.Value; memberToken.Invalidate();
+						if (memberValue != state) AssignValueToMember();
 					}
 				} else {
 					if (!TryGetValue()) { return false; }
-					if (memberValue == tokens) { continue; }
-					listData.Add(memberValue);
+					if (memberValue != state) listData.Add(memberValue);
 				}
+				SkipComments(true);
 			}
-			if (isList) {
+			FinalParseDataCompile();
+			return true;
+		}
+		protected void FinalParseDataCompile() {
+			if (listData != null) {
 				if (resultType.IsArray) {
 					Array a = Array.CreateInstance(memberType, listData.Count);
 					for (int i = 0; i < listData.Count; ++i) { a.SetValue(listData[i], i); }
@@ -172,95 +180,117 @@ namespace NonStandard.Data.Parse {
 					for (int i = 0; i < listData.Count; ++i) { ilist.Add(listData[i]); }
 				}
 			}
-			return true;
 		}
-
-		public bool GetMemberNameAndAssociatedType() {
-			memberToken = tokens[tokenIndex];
-			string str = null;
-			Context.Entry e = memberToken.AsContextEntry;
+		protected bool GetMemberNameAndAssociatedType() {
+			memberToken = Current.GetToken();
+			if (SkipStructuredDelimiters(memberToken.GetAsDelimiter())) { memberToken.Invalidate(); return true; }
+			memberId = null;
+			Context.Entry e = memberToken.GetAsContextEntry();
 			if (e != null) {
 				if (dictionaryAdd == null) {
-					if (e.IsText) {
-						str = e.Text;
+					if (e.IsText()) {
+						memberId = e.GetText();
 					} else {
-						if (errors != null) errors.Add(new ParseError(memberToken, rows, "unable to parse member name " + e.BeginToken + " for " + resultType));
+						AddError("unable to parse member ("+e.context.name+") as member name for " + resultType);
 					}
 				} else {
-					str = "dictionary member value will be resolved later";
+					memberId = e.Resolve(tok, scope);// "dictionary member value will be resolved later";
 				}
-				tokenIndex += e.tokenCount - 1;
+				if (e.tokens == Current.tokens) {
+					Current.tokenIndex += e.tokenCount - 1;
+				}
 			} else {
-				str = memberToken.AsBasicToken;
+				memberId = memberToken.GetAsBasicToken();
 			}
-			if (str == null) { memberToken.index = -1; memberValue = tokens; return true; }
-			if (dictionaryAdd != null) { return true; } // dictionary has no field to find
-			int index = FindIndexWithWildcard(fieldNames, str, true);
-			if (index < 0) {
-				index = FindIndexWithWildcard(propNames, str, true);
-				if (index < 0) {
-					if (errors != null) {
-						StringBuilder sb = new StringBuilder();
-						sb.Append("\nvalid possibilities include: ");
-						for (int i = 0; i < fieldNames.Length; ++i) {
-							if (i > 0) sb.Append(", ");
-							sb.Append(fieldNames[i]);
-						}
-						for (int i = 0; i < propNames.Length; ++i) {
-							if (i > 0 || fieldNames.Length > 0) sb.Append(", ");
-							sb.Append(propNames[i]);
-						}
-						errors.Add(new ParseError(memberToken, rows, "could not find field or property \"" + str + "\" in " + result.GetType() + sb));
-					}
-					return false;
-				} else {
-					prop = props[index];
-					memberType = prop.PropertyType;
-				}
-			} else {
-				field = fields[index];
-				memberType = field.FieldType;
+			if (memberId == null) {
+				memberToken.index = -1; memberValue = state;
+				return true;
 			}
 			memberValue = null;
-			if (memberType.IsArray) {
-				isVarPrimitiveType = false;
-			} else {
-				isVarPrimitiveType = CodeConvert.IsConvertable(memberType);
+			return CalculateMemberTypeBasedOnName();
+		}
+		protected bool CalculateMemberTypeBasedOnName() {
+			if (dictionaryAdd != null) { return true; } // dictionary has no field to find
+			string memberName = memberId as string;
+			if(!reflectTable.TryGetMemberDetails(memberName, out memberType, out field, out prop)) {
+				AddError("could not find \"" + memberName + "\" in " + result.GetType() + ". eg: " + reflectTable);
+				return false;
 			}
 			return true;
 		}
-		public bool TryGetValue() {
-			memberValue = null;
-			Token token = tokens[tokenIndex];
-			object meta = token.meta;
-			Delim delim = meta as Delim;
-			if (delim != null) {
-				switch (delim.text) {
-				// skip these delimiters as though they were whitespace.
-				case "=": case ":": case ",": break;
-				default:
-					if (errors != null) errors.Add(new ParseError(token, rows, "unexpected delimiter \"" + delim.text + "\""));
-					return false;
-				}
-				memberValue = tokens;
-				return true;
+		protected bool SkipStructuredDelimiters(Delim delim) {
+			if (delim == null) return false;
+			switch (delim.text) {
+			// skip these delimiters as though they were whitespace.
+			case "=": case ":": case ",": break;
+			default:
+				AddError("unexpected delimiter \"" + delim.text + "\"");
+				return false;
 			}
+			memberValue = state;
+			return true;
+		}
+		public static int AssignDictionaryMember(KeyValuePair<Type,Type> dType, MethodInfo dictionaryAddMethod,
+			object dict, object key, object value) {
+			if (!dType.Key.IsAssignableFrom(key.GetType())) { return 1; }
+			if (!dType.Value.IsAssignableFrom(value.GetType())) { return 2; }
+			dictionaryAddMethod.Invoke(dict, new object[] { key, value });
+			return 0;
+		}
+		protected void AssignValueToMember() {
+			if (dictionaryAdd != null) {
+				switch(AssignDictionaryMember(dictionaryTypes, dictionaryAdd, result, memberId, memberValue)) {
+				case 1: AddError("unable to convert key \"" + memberId + "\" (" + memberId.GetType() + 
+					") to " + dictionaryTypes.Key); break;
+				case 2: AddError("unable to convert \"" + memberId + "\" value (" + memberValue.GetType() + 
+					") \"" + memberValue + "\" to type " + memberType); break;
+				}
+			} else {
+				if (field != null) {
+					field.SetValue(result, memberValue);
+				} else if (prop != null) {
+					prop.SetValue(result, memberValue, null);
+				} else {
+					throw new Exception("huh? how did we get here?");
+				}
+				field = null; prop = null; memberType = dictionaryTypes.Value; memberToken.Invalidate();
+			}
+		}
+		protected bool TryGetValue() {
+			memberValue = null;
+			Token token = Current.GetToken();
+			object meta = token.meta;
+			if(SkipStructuredDelimiters(meta as Delim)) { return true; }
 			Context.Entry context = meta as Context.Entry;
 			if (context != null) {
-				int indexAfterContext = tokenIndex + context.tokenCount;
-				if (context.IsText) {
-					memberValue = context.Text;
-				} else if (!CodeConvert.TryParse(memberType, tokens.GetRange(tokenIndex, indexAfterContext - tokenIndex), ref memberValue, rows, errors)) {
-					return false;
+				bool subContextUsingSameList = context.tokens == Current.tokens;
+				if (context.IsText()) {
+					memberValue = context.GetText();
+				} else {
+					int index = Current.tokenIndex;
+					List<Token> parseNext = subContextUsingSameList
+							? Current.tokens.GetRange(index, context.tokenCount)
+							: context.tokens;
+					if (memberType == typeof(Expression)) {
+						memberValue = new Expression(parseNext);
+					} else {
+						if (CodeConvert.IsConvertable(memberType) && !subContextUsingSameList) {
+							memberValue = context.Resolve(tok, scope);
+						} else {
+							if (!CodeConvert.TryParse(memberType, parseNext, ref memberValue, scope, tok)) { return false; }
+						}
+					}
 				}
-				tokenIndex = indexAfterContext - 1; // -1 because a for-loop increments tokenIndex right outside this method
+				if (subContextUsingSameList) {
+					Current.tokenIndex += context.tokenCount - 1; // -1 because increment happens after this method
+				}
 				return true;
 			}
 			string s = meta as string;
 			if (s != null) {
 				memberValue = token.ToString(s);
 				if (!CodeConvert.TryConvert(ref memberValue, memberType)) {
-					if (errors != null) errors.Add(new ParseError(token, rows, "unable to convert (" + memberValue + ") to type '" + memberType + "'"));
+					AddError("unable to convert (" + memberValue + ") to type '" + memberType + "'");
 					return false;
 				}
 				return true;
@@ -269,25 +299,82 @@ namespace NonStandard.Data.Parse {
 			if (sub != null) {
 				memberValue = sub.value;
 				if (!CodeConvert.TryConvert(ref memberValue, memberType)) {
-					if (errors != null) errors.Add(new ParseError(token, rows, "unable to convert substitution (" + memberValue + ") to type '" + memberType + "'"));
+					AddError("unable to convert substitution (" + memberValue + ") to type '" + memberType + "'");
 					return false;
 				}
 				return true;
 			}
-			if (errors != null) errors.Add(new ParseError(token, rows, "unable to parse token with meta data " + meta));
+			AddError("unable to parse token with meta data " + meta);
 			return false;
 		}
 
-		public static int FindIndexWithWildcard(string[] names, string name, bool isSorted) {
-			if (name == "*") return 0;
-			bool startsWith = name.EndsWith("*"), endsWith = name.StartsWith("*");
-			if (startsWith && endsWith) { return Array.FindIndex(names, s => s.Contains(name.Substring(1, name.Length - 2))); }
-			if (endsWith) { name = name.Substring(1); return Array.FindIndex(names, s => s.EndsWith(name)); }
-			if (startsWith) { name = name.Substring(0, name.Length - 1); }
-			int index = isSorted ? Array.BinarySearch(names, name) : (startsWith)
-				? Array.FindIndex(names, s => s.StartsWith(name)) : Array.IndexOf(names, name);
-			if (startsWith && index < 0) { return ~index; }
+		protected void AddError(string message) { tok.AddError(Current.GetToken(), message); }
+
+		/// <param name="names"></param>
+		/// <param name="n">name to find. the needle in the names haystack</param>
+		/// <param name="sorted"></param>
+		/// <param name="wildcard"></param>
+		/// <returns></returns>
+		public static int FindIndexWithWildcard(string[] names, string n, bool sorted, char wildcard = Wildcard) {
+			if (n.Length == 1 && n[0] == wildcard) return 0;
+			bool startsW = n[n.Length-1]==(wildcard), endsW = n[0]==(wildcard);
+			if (startsW && endsW) { return Array.FindIndex(names, s => s.Contains(n.Substring(1, n.Length - 2))); }
+			if (endsW) { n = n.Substring(1); return Array.FindIndex(names, s => s.EndsWith(n)); }
+			if (startsW) { n = n.Substring(0, n.Length - 1); }
+			int index = sorted ? Array.BinarySearch(names, n) : (startsW)
+				? Array.FindIndex(names, s => s.StartsWith(n)) : Array.IndexOf(names, n);
+			if (startsW && index < 0) { return ~index; }
 			return index;
+		}
+		public static bool IsWildcardMatch(string possibility, string n, char wildcard = Wildcard) {
+			if (n.Length == 1 && n[0] == wildcard) return true;
+			bool startsW = n[n.Length - 1] == (wildcard), endsW = n[0] == (wildcard);
+			if (startsW && endsW) { return possibility.Contains(n.Substring(1, n.Length - 2)); }
+			if (endsW) { n = n.Substring(1); return possibility.EndsWith(n); }
+			if (startsW) { n = n.Substring(0, n.Length - 1); }
+			return possibility.StartsWith(n);
+		}
+	}
+	public class MemberReflectionTable {
+		public string[] fieldNames, propNames;
+		public FieldInfo[] fields;
+		public PropertyInfo[] props;
+		public void SetType(Type type) {
+			fields = type.GetFields();
+			props = type.GetProperties();
+			Array.Sort(fields, (a, b) => a.Name.CompareTo(b.Name));
+			Array.Sort(props, (a, b) => a.Name.CompareTo(b.Name));
+			fieldNames = Array.ConvertAll(fields, f => f.Name);
+			propNames = Array.ConvertAll(props, p => p.Name);
+		}
+		public override string ToString() {
+			StringBuilder sb = new StringBuilder();
+			sb.Append(fieldNames.Join(", "));
+			if (fieldNames.Length > 0 && propNames.Length > 0) { sb.Append(", "); }
+			sb.Append(propNames.Join(", "));
+			return sb.ToString();
+		}
+		public FieldInfo GetField(string name) {
+			int index = Parser.FindIndexWithWildcard(fieldNames, name, true); return (index < 0) ? null : fields[index];
+		}
+		public PropertyInfo GetProperty(string name) {
+			int index = Parser.FindIndexWithWildcard(propNames, name, true); return (index < 0) ? null : props[index];
+		}
+		public bool TryGetMemberDetails(string memberName, out Type memberType, out FieldInfo field, out PropertyInfo prop) {
+			field = GetField(memberName);
+			if (field != null) {
+				memberType = field.FieldType;
+				prop = null;
+			} else {
+				prop = GetProperty(memberName);
+				if (prop != null) {
+					memberType = prop.PropertyType;
+				} else {
+					memberType = null;
+					return false;
+				}
+			}
+			return true;
 		}
 	}
 }

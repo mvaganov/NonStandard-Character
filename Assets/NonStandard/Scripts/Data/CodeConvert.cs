@@ -1,30 +1,32 @@
 ﻿using NonStandard.Data.Parse;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace NonStandard.Data {
 	public class CodeConvert {
-		public static bool TryFill<T>(string text, ref T data, List<ParseError> errors = null) {
+		public static bool TryFill<T>(string text, ref T data, object scope, Tokenizer tokenizer = null) {
 			object value = data;
-			bool result = TryParse(typeof(T), text, ref value, errors);
+			bool result = TryParse(typeof(T), text, ref value, tokenizer);
 			data = (T)value;
 			return result;
 		}
-		public static bool TryParse<T>(string text, out T data, List<ParseError> errors = null) {
+		public static bool TryParse<T>(string text, out T data, object scope, Tokenizer tokenizer = null) {
 			object value = null;
-			bool result = TryParse(typeof(T), text, ref value, errors);
+			bool result = TryParse(typeof(T), text, ref value, scope, tokenizer);
 			data = (T)value;
 			return result;
 		}
-		public static bool TryParse(Type type, string text, ref object data, List<ParseError> errors = null) {
-			List<Token> tokens = new List<Token>();
-			List<int> rows = new List<int>();
-			Tokenizer.Tokenize(text, tokens, rows, errors);
-			return TryParse(type, tokens, ref data, rows, errors);
+		public static bool TryParse(Type type, string text, ref object data, object scope, Tokenizer tokenizer = null) {
+			if(tokenizer == null) { tokenizer = new Tokenizer(); }
+			tokenizer.Tokenize(text);
+			//Show.Log(Show.GetStack(4));
+			//Show.Log(tokenizer.DebugPrint(-1));
+			return TryParse(type, tokenizer.tokens, ref data, scope, tokenizer);
 		}
-		public static bool TryParse(Type type, IList<Token> tokens, ref object data, IList<int> rows, List<ParseError> errors = null) {
+		public static bool TryParse(Type type, List<Token> tokens, ref object data, object scope, Tokenizer tokenizer) {
 			Parser p = new Parser();
-			p.Init(type, tokens, data, rows, errors);
+			p.Init(type, tokens, data, tokenizer, scope);
 			bool result = p.TryParse();
 			data = p.result;
 			return result;
@@ -49,7 +51,6 @@ namespace NonStandard.Data {
 			}
 			return typeToGet.IsEnum;
 		}
-
 		public static bool TryConvert(ref object value, Type typeToGet) {
 			try {
 				if (typeToGet.IsEnum) {
@@ -75,18 +76,32 @@ namespace NonStandard.Data {
 			} catch { return false; }
 			return true;
 		}
-		public static bool TryConvertEnumWildcard(Type typeToGet, string str, out object value) {
-			bool startsWith = str.EndsWith("*"), endsWidth = str.StartsWith("*");
+		public static bool TryConvertEnumWildcard(Type typeToGet, string str, out object value, char wildcard = Parser.Wildcard) {
+			bool startsWith = str[str.Length-1]==(wildcard), endsWidth = str[0]==(wildcard);
 			if (startsWith || endsWidth) {
 				Array a = Enum.GetValues(typeToGet);
 				string[] names = new string[a.Length];
 				for (int i = 0; i < a.Length; ++i) { names[i] = a.GetValue(i).ToString(); }
-				int index = Parser.FindIndexWithWildcard(names, str, false);
+				int index = Parser.FindIndexWithWildcard(names, str, false, wildcard);
 				if (index < 0) { value = null; return false; }
 				str = names[index];
 			}
 			value = Enum.Parse(typeToGet, str);
 			return true;
+		}
+
+		public static string Format(string format, object scope, Tokenizer tokenizer = null) {
+			if (tokenizer == null) { tokenizer = new Tokenizer(); }
+			tokenizer.Tokenize(format, CodeRules.CodeInString);
+			StringBuilder sb = new StringBuilder();
+			for(int i = 0; i < tokenizer.tokens.Count; ++i) {
+				object obj;
+				Type type;
+				Token token = tokenizer.tokens[i];
+				CodeRules.op_ResolveToken(tokenizer, token, scope, out obj, out type);
+				sb.Append(obj.ToString());
+			}
+			return sb.ToString();
 		}
 	}
 }

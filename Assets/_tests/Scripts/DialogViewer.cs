@@ -9,7 +9,11 @@ using NonStandard.Data.Parse;
 [Serializable] public class Dialog {
 	public string name;
 	public DialogOption[] options;
-	public abstract class DialogOption { public string text; public TextAnchor anchorText = TextAnchor.UpperLeft; }
+	public abstract class DialogOption {
+		public string text;
+		public TextAnchor anchorText = TextAnchor.UpperLeft;
+		public Expression If; // conditional requirement for this option
+	}
 	[Serializable] public class Text : DialogOption { }
 	[Serializable] public class Choice : DialogOption { public string command; }
 	[Serializable] public class Command : DialogOption { public string command; }

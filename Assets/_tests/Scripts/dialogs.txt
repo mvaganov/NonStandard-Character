@@ -1,19 +1,19 @@
-[ // this JSON-like script is a list of dialogs, which will be parsed and compiled by CodeConvert.TryParse
+﻿// this JSON-like script is a list of dialogs, which will be parsed and compiled by CodeConvert.TryParse
 { } // empty dialog to start with
-{
+{ // called by our first NPC
 	name = "welcome",
 	options = [
 		{
-			=Dialog+Text
+			="Dialog+Text"
 			text = "Welcome to the NonStandard game"
 		}, {
-			=Dialog+Choice
+			="Dialog+Choice"
 			text = "Hi. See ya around."
 			command = "done"
 		}, {
-			=Dialog+Choice
-			text = "what is this place?"
-			command = "dialog what"
+			="Dialog+Choice"
+			text = "What is this place?"
+			command = "dialog what" // a command with a parameter, like in a command-line terminal
 		}
 	]
 }, {
@@ -24,7 +24,7 @@
 		{ =Choice text "more info please" command "dialog moreinfo" }
 	]
 },
-// a lot of structural syntax is optional, and the wildcard character '*' can be used if enough identifying text is given
-{n* moreinfo o*[{=T* t*"no more info."}{=Ch* t* okthxbye c* done}{=Ch* t*"please?"c*"dialog welcome"}{=Co* c*"++ counter"}
+// a lot of structural syntax is optional, and the wildcard character '¤' can be used if enough identifying text is given
+{n¤ moreinfo o¤[{=T¤ t¤"no more info. {0} {1}"%(xp,nu¤)}{=Ch¤ t¤ okthxbye c¤ done}{=Ch¤ t¤"please?"c¤"dialog welcome"}{=Co¤ c¤"++ counter"}
+{=Ch¤ r¤((2*(1+1))<=(nu¤*1))t¤ exit*3 c¤ exit}
 ]}
-]

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 #if UNITY_5_3_OR_NEWER
@@ -21,13 +22,23 @@ namespace NonStandard {
 
 		static Show() {
 #if UNITY_5_3_OR_NEWER
-			onLog += Debug.Log;
-			onError += Debug.LogError;
-			onWarning += Debug.LogWarning;
+			onLog += UnityEngine.Debug.Log;
+			onError += UnityEngine.Debug.LogError;
+			onWarning += UnityEngine.Debug.LogWarning;
 #else
 			onLog += Console.WriteLine;
-			onError += Console.WriteLine;
-			onWarning += Console.WriteLine;
+			onError += s => {
+				ConsoleColor c = Console.ForegroundColor;
+				Console.ForegroundColor = ConsoleColor.Red;
+				Console.WriteLine(s);
+				Console.ForegroundColor = c;
+			};
+			onWarning += s => {
+				ConsoleColor c = Console.ForegroundColor;
+				Console.ForegroundColor = ConsoleColor.Yellow;
+				Console.WriteLine(s);
+				Console.ForegroundColor = c;
+			};
 #endif
 		}
 
@@ -42,41 +53,42 @@ namespace NonStandard {
 		/// </summary>
 		/// <param name="obj"></param>
 		/// <param name="pretty"></param>
-		/// <param name="includeType">include "=TypeName" if there could be ambiguity because of inheritance</param>
+		/// <param name="showType">include "=TypeName" if there could be ambiguity because of inheritance</param>
 		/// <param name="depth"></param>
-		/// <param name="recursionStack">used to prevent recursion stack overflows</param>
+		/// <param name="rStack">used to prevent recursion stack overflows</param>
+		/// <param name="filter">object0 is the object, object1 is the member, object2 is the value. if it returns null, print as usual. if returns "", skip print.</param>
 		/// <returns></returns>
-		public static string Stringify(object obj, bool pretty = false, bool includeType = true,
-			int depth = 0, List<object> recursionStack = null) {
+		public static string Stringify(object obj, bool pretty = false, bool showType = true, int depth = 0, 
+			List<object> rStack = null, Func<object,object,object,string> filter = null) {
 			if (obj == null) return "null";
+			if(filter != null) { string res = filter.Invoke(obj, null, null); if(res != null) { return res; } }
 			Type t = obj.GetType();
+			MethodInfo stringifyMethod = t.GetMethod("Stringify", Type.EmptyTypes);
+			if(stringifyMethod != null) { return stringifyMethod.Invoke(obj, new object[] { }) as string; }
 			StringBuilder sb = new StringBuilder();
 			Type iListElement = t.GetIListType();
-			bool showTypeHere = includeType; // no need to print type if there isn't type ambiguity
-			if (includeType) {
+			bool showTypeHere = showType; // no need to print type if there isn't type ambiguity
+			if (showType) {
 				Type b = t.BaseType; // if the parent class is a base class, there isn't any ambiguity
-				if (b == typeof(ValueType) || b == typeof(System.Object) || b == typeof(Array)) { showTypeHere = false; }
+				if (b == typeof(ValueType) || b == typeof(System.Object) || b == typeof(Array)) 
+					{ showTypeHere = false; }
 			}
 			string s = obj as string;
 			if (s != null || t.IsPrimitive || t.IsEnum) {
 				if (s != null) {
-					if (!IsPrintableWithoutEscape(s)) { // needs escape
-						sb.Append("\"").Append(Escape(s)).Append("\"");
-					} else {
-						sb.Append(s);
-					}
+					sb.Append("\"").Append(Escape(s)).Append("\"");
 				} else {
 					sb.Append(obj.ToString());
 				}
 				return sb.ToString();
 			}
-			if (recursionStack == null) { recursionStack = new List<object>(); }
-			int recursionIndex = recursionStack.IndexOf(obj);
+			if (rStack == null) { rStack = new List<object>(); }
+			int recursionIndex = rStack.IndexOf(obj);
 			if (recursionIndex >= 0) {
-				sb.Append("/* recursed " + (recursionStack.Count - recursionIndex) + " */");
+				sb.Append("/* recursed " + (rStack.Count - recursionIndex) + " */");
 				return sb.ToString();
 			}
-			recursionStack.Add(obj);
+			rStack.Add(obj);
 			if (t.IsArray || iListElement != null) {
 				sb.Append("[");
 				if (showTypeHere) {
@@ -85,24 +97,19 @@ namespace NonStandard {
 				}
 				IList list = obj as IList;
 
-				if (iListElement != null && iListElement.IsPrimitive) {
-					for (int i = 0; i < list.Count; ++i) {
-						if (i > 0) { sb.Append(","); if (pretty) sb.Append(" "); }
-						sb.Append(Stringify(list[i], pretty, includeType, depth + 1, recursionStack));
+				for (int i = 0; i < list.Count; ++i) {
+					if (i > 0) { sb.Append(","); }
+					if (pretty && !iListElement.IsPrimitive) { sb.Append("\n" + Indent(depth + 1)); }
+					if (filter == null) {
+						sb.Append(Stringify(list[i], pretty, showType, depth + 1, rStack));
+					} else {
+						FilterElement(sb, obj, i, list[i], pretty, showType, true, depth, rStack, filter);
 					}
-				} else {
-					for (int i = 0; i < list.Count; ++i) {
-						if (i > 0) { sb.Append(","); }
-						if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
-						sb.Append(Stringify(list[i], pretty, includeType, depth + 1, recursionStack));
-					}
-					if (pretty) { sb.Append("\n" + Indent(depth)); }
 				}
+				if (pretty) { sb.Append("\n" + Indent(depth)); }
 				sb.Append("]");
 			} else {
-				KeyValuePair<Type, Type> dType = t.GetIDictionaryType();
-				bool isDict = dType.Key != null;//t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>);
-				showTypeHere &= !isDict;
+				bool isDict = t.IsGenericType && t.GetGenericTypeDefinition() == typeof(Dictionary<,>);
 				sb.Append("{");
 				if (showTypeHere) {
 					if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
@@ -113,29 +120,35 @@ namespace NonStandard {
 					for (int i = 0; i < fi.Length; ++i) {
 						if (i > 0 || showTypeHere) { sb.Append(","); }
 						if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
-						sb.Append(fi[i].Name);
-						sb.Append(pretty ? " : " : ":");
-						sb.Append(Stringify(fi[i].GetValue(obj), pretty, includeType, depth + 1, recursionStack));
+						if (filter == null) {
+							sb.Append(fi[i].Name).Append(pretty ? " : " : ":");
+							sb.Append(Stringify(fi[i].GetValue(obj), pretty, showType, depth + 1, rStack));
+						} else {
+							FilterElement(sb, obj, fi[i].Name, fi[i].GetValue(obj), 
+								pretty, showType, false, depth, rStack, filter);
+						}
 					}
 				} else {
-					MethodInfo getEnumerator = t.GetMethod("GetEnumerator", new Type[] { });
+					MethodInfo getEnum = t.GetMethod("GetEnumerator", new Type[] { });
 					MethodInfo getKey = null, getVal = null;
 					object[] noparams = new object[] { };
-					IEnumerator e = getEnumerator.Invoke(obj, noparams) as IEnumerator;
-					bool somethingPrinted = false;
+					IEnumerator e = getEnum.Invoke(obj, noparams) as IEnumerator;
+					bool printed = false;
 					while (e.MoveNext()) {
 						object o = e.Current;
 						if (getKey == null) { getKey = o.GetType().GetProperty("Key").GetGetMethod(); }
 						if (getVal == null) { getVal = o.GetType().GetProperty("Value").GetGetMethod(); }
-						if (somethingPrinted || showTypeHere) { sb.Append(","); }
+						if (printed || showTypeHere) { sb.Append(","); }
 						if (pretty) { sb.Append("\n" + Indent(depth + 1)); }
 						object k = getKey.Invoke(o, noparams);
 						object v = getVal.Invoke(o, noparams);
-						string keyString = Stringify(k, pretty, includeType, depth + 1, recursionStack);
-						sb.Append(keyString);
-						sb.Append(pretty ? " : " : ":");
-						sb.Append(Stringify(v, pretty, includeType, depth + 1, recursionStack));
-						somethingPrinted = true;
+						if (filter == null) {
+							sb.Append(k).Append(pretty ? " : " : ":");
+							sb.Append(Stringify(v, pretty, showType, depth + 1, rStack));
+							printed = true;
+						} else {
+							printed = FilterElement(sb, obj, k, v, pretty, showType, false, depth, rStack, filter);
+						}
 					}
 				}
 				if (pretty) { sb.Append("\n" + Indent(depth)); }
@@ -144,23 +157,24 @@ namespace NonStandard {
 			if (sb.Length == 0) { sb.Append(obj.ToString()); }
 			return sb.ToString();
 		}
-		private static Dictionary<string, bool> protectedKeywords = new Dictionary<string, bool>() {
-			{ "null", true }, { "true", true }, { "false", true }, {"undefined", true}
-		};
-		public static bool IsPrintableWithoutEscape(string s) {
-			for(int i = 0; i < s.Length; ++i) {
-				char c = s[i];
-				switch (s[i]) {
-				case '\'': case '\"': case '(': case ')': case ',': case '\\': case ':': case ';': case '{': case '}':
-				case '0': case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': case '9':
-					return false;
-				}
-				if (c <= 32 || c >= 127) return false;
+
+		private static bool FilterElement(StringBuilder sb, object obj, object key, object val, 
+			bool pretty, bool includeType, bool isArray, int depth, List<object> recursionStack,
+			Func<object, object, object, string> filter = null) {
+			bool unfiltered = true;
+			if (filter != null) {
+				string result = filter.Invoke(obj, key, val);
+				unfiltered = result == null;
+				if (!unfiltered && result.Length != 0) { sb.Append(result); return true; }
 			}
-			bool v;
-			if(protectedKeywords.TryGetValue(s, out v)) { return false; }
-			return true;
+			if (unfiltered) {
+				if (!isArray) { sb.Append(key).Append(pretty ? " : " : ":"); }
+				sb.Append(Stringify(val, pretty, includeType, depth + 1, recursionStack));
+				return true;
+			}
+			return false;
 		}
+
 		/// <summary>
 		/// converts a string from it's code to it's compiled form, with processed escape sequences
 		/// </summary>
@@ -219,6 +233,32 @@ namespace NonStandard {
 					}
 					break;
 				}
+			}
+			return sb.ToString();
+		}
+
+		public static IList<string> GetStackFullPath(int stackDepth = 1, int stackStart = 1) {
+			StackTrace stackTrace = new StackTrace(stackStart+1, true);
+			int len = Math.Min(stackDepth, stackTrace.FrameCount);
+			List<string> stack = new List<string>();
+			for (int i = 0; i < len; ++i) {
+				StackFrame f = stackTrace.GetFrame(i);
+				if (f == null) break;
+				string path = f.GetFileName();
+				if (path == null) break;
+				stack.Add(path+":"+f.GetFileLineNumber());
+			}
+			return stack;
+		}
+		public static string GetStack(int stackDepth = 1, int stackStart = 1) {
+			StringBuilder sb = new StringBuilder();
+			IList<string> stack = GetStackFullPath(stackDepth, stackStart);
+			for(int i = 0; i < stack.Count; ++i) {
+				string path = stack[i];
+				int fileStart = path.LastIndexOf(System.IO.Path.DirectorySeparatorChar);
+				if (fileStart < 0) fileStart = path.LastIndexOf(System.IO.Path.AltDirectorySeparatorChar);
+				if (sb.Length > 0) sb.Append(", ");
+				sb.Append(path.Substring(fileStart + 1));
 			}
 			return sb.ToString();
 		}

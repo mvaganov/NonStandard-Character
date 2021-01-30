@@ -416,8 +416,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dict:
     onAssignmentToFunction: 0
-  values: i-2 f3testing12"3"-2.99
-  parseResults: "{\n  i : -2,\n  f : 3,\n  testing : 12,\n  \"3\" : -2.99\n}"
+  values: i-2 f3testing12"3"-2.91
+  parseResults: "{\n  =\"NonStandard.Data.SensitiveHashTable_stringfloat\",\n  hFunc
+    : null,\n  buckets : [\n    null,\n    [\n      {\n        hash : 105,\n        _key
+    : \"i\",\n        _val : -2,\n        parent : /* recursed 4 */,\n        onChange
+    : null,\n        dependents : null,\n        reliesOn : null,\n        comparer
+    : {\n        }\n      }\n    ],\n    null,\n    null,\n    null,\n    null,\n
+    \   null,\n    null\n  ],\n  orderedPairs : [\n    /* recursed 3 */\n  ],\n  onChange
+    : null,\n  onAssignmentToFunction : ThrowException\n}"
 --- !u!1 &172256856
 GameObject:
   m_ObjectHideFlags: 0
