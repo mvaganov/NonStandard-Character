@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 using UnityEngine;
 #endif
 namespace NonStandard {
@@ -21,7 +21,7 @@ namespace NonStandard {
 		public static void Warning(string str) { onWarning.Invoke(str); }
 
 		static Show() {
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 			onLog += UnityEngine.Debug.Log;
 			onError += UnityEngine.Debug.LogError;
 			onWarning += UnityEngine.Debug.LogWarning;

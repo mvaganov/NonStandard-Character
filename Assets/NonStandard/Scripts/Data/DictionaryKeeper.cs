@@ -5,9 +5,9 @@ using UnityEngine;
 namespace NonStandard.Data {
 
 	[System.Serializable] public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
-	public class Dictionary : MonoBehaviour {
-		public SensitiveHashTable_stringfloat dict = new SensitiveHashTable_stringfloat();
-
+	public class DictionaryKeeper : MonoBehaviour {
+		protected SensitiveHashTable_stringfloat dict = new SensitiveHashTable_stringfloat();
+		public SensitiveHashTable_stringfloat Dictionary { get { return dict; } }
 #if UNITY_EDITOR
 		[TextArea(3,10)]
 		public string values;

@@ -411,12 +411,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 100293798}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: eddca87af3a387341a3db95c4d959ae6, type: 3}
+  m_Script: {fileID: 11500000, guid: 7bd8ba2fb0435214b9a3fe20c49f2374, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  dict:
-    onAssignmentToFunction: 0
-  values: i-2 f3testing12"3"-2.91
+  values: i-2 f3testing12"3"-2.9
   parseResults: "{\n  =\"NonStandard.Data.SensitiveHashTable_stringfloat\",\n  hFunc
     : null,\n  buckets : [\n    null,\n    [\n      {\n        hash : 105,\n        _key
     : \"i\",\n        _val : -2,\n        parent : /* recursed 4 */,\n        onChange

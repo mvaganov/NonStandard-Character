@@ -110,6 +110,9 @@ namespace NonStandard.Ui {
 		}
 
 		public void Start() {
+			#if !RENDER_SOFTWARE_CURSOR
+			Debug.LogWarning("software mouse cursor may not work correctly...");
+			#endif
 			SetCursor(currentCursor);
 			if(rotation.Rotating || rotation.Angle != 0) { AddRotator(); }
 		}

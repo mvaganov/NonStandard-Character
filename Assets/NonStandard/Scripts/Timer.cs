@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 using System.Collections;
 using System.Text;
 using UnityEngine;
@@ -21,7 +21,7 @@ NonStandard.Clock.setTimeout (() => {
 // latest version at: https://pastebin.com/raw/h61nAC3E -- (2020/11/26)
 namespace NonStandard
 {
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 	public class Timer : MonoBehaviour
 	{
 		[Tooltip("When to trigger"), ContextMenuItem("Create Main Timer", "CraeteMainTimer")]
@@ -125,7 +125,7 @@ namespace NonStandard
 		/// [Tooltip("stop advancing time & executing the queue?")]
 		public bool IsPaused = false;
 		private bool pausedLastFrame = false;
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 		public bool pausePhysicsWhenPaused = true;
 #endif
 		/// <summary>
@@ -171,7 +171,7 @@ namespace NonStandard
 		}
 
 		public static void Log(string text, bool error = false) {
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 			if (error) Debug.LogError(text);
 			else Debug.Log(text);
 #else
@@ -182,7 +182,7 @@ namespace NonStandard
 		private Clock() {
 			if(s_instance == null) { s_instance = this; }
 			if(s_instance != this) { Log("multiple clocks instantiated?", true); }
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 			MainClock.Instance();
 #endif
 		}
@@ -287,7 +287,7 @@ namespace NonStandard
 		}
 
 		public void LinkedToMainThreadCheck() {
-#if !UNITY_5_3_OR_NEWER
+#if !UNITY_2017_1_OR_NEWER
 			if (linkedToMainThread == null) {
 				Log("Please call Clock.Instance.Update() regularly to use Clock system", true);
 			}
@@ -356,7 +356,7 @@ namespace NonStandard
 
 		public void Start() { Init(); RefreshTiming(); }
 
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 		private float __oldTimeScale;
 #endif
 		public void Update() {
@@ -368,7 +368,7 @@ namespace NonStandard
 					alternativeTicks = nowTicks;
 					if (onPause != null) { onPause.Invoke(); }
 					pausedLastFrame = true;
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 					if (pausePhysicsWhenPaused) {
 						__oldTimeScale = Time.timeScale;
 						Time.timeScale = 0;
@@ -378,7 +378,7 @@ namespace NonStandard
 			} else if (pausedLastFrame) {
 				if (onUnpause != null) { onUnpause.Invoke(); }
 				pausedLastFrame = false;
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 				if (pausePhysicsWhenPaused) {
 					Time.timeScale = __oldTimeScale;
 				}
@@ -394,12 +394,12 @@ namespace NonStandard
 			if (queue.Count > 0 && !IsPaused) {
 				if (alternativeTicks == 0) {
 					now_t = nowForReals;
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 					if (Time.timeScale != 1) { alternativeTicks = now_t; }
 #endif
 				} else {
 					float deltaTimeTicks =
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 					(Time.deltaTime * 1000);
 #else
 					(__lastUpdate != 0) ? (NowRealTicks - __lastUpdate) : 0;
@@ -413,11 +413,11 @@ namespace NonStandard
 					thingsDone += DoWhatIsNeededNow(queue, now_t, deadline);
 				}
 			}
-#if !UNITY_5_3_OR_NEWER
+#if !UNITY_2017_1_OR_NEWER
 			__lastUpdate = NowRealTicks;
 #endif
 		}
-#if !UNITY_5_3_OR_NEWER
+#if !UNITY_2017_1_OR_NEWER
 		private long __lastUpdate = 0;
 #endif
 
@@ -499,7 +499,7 @@ namespace NonStandard
 			if (typeof(System.Action).IsAssignableFrom(type)) {
 				System.Action a = whatToActivate as System.Action;
 				a.Invoke();
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 			} else if (typeof(UnityEngine.Events.UnityEvent).IsAssignableFrom(type)) {
 				UnityEngine.Events.UnityEvent a = whatToActivate as UnityEngine.Events.UnityEvent;
 				a.Invoke();
@@ -620,7 +620,7 @@ namespace NonStandard
 				}
 			}
 		}
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 		public class RememberedOriginalMaterial : MonoBehaviour { public Material oldMaterial; }
 		public class RememberedOriginalColor : MonoBehaviour { public Color oldColor; }
 
@@ -643,7 +643,7 @@ namespace NonStandard
 
 	public interface IReference { object Dereference(); }
 
-#if UNITY_5_3_OR_NEWER
+#if UNITY_2017_1_OR_NEWER
 	[System.Serializable]
 	public struct ObjectPtr : IReference
 	{
@@ -698,6 +698,7 @@ namespace NonStandard
 #endif
 }
 
+#if UNITY_2017_1_OR_NEWER
 [System.Serializable]
 public class StringWithDefaults {
 	public string str;
@@ -707,8 +708,7 @@ public class StringWithDefaults {
 
 	}
 }
-
-
+#endif
 
 #if UNITY_EDITOR
 // used to create scriptable objects with the ObjectPtr property
