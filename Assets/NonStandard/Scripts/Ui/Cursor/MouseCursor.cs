@@ -20,6 +20,7 @@ namespace NonStandard.Ui {
 		public static MouseCursor Instance {
 			get {
 				if (_instance) return _instance;
+				if (Inputs.AppInput.IsQuitting) return null;
 				_instance = FindObjectOfType<MouseCursor>();
 				if (!_instance) {
 					Debug.LogWarning("A MouseCursor object must be created to use mouse cursor changes");

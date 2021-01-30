@@ -404,6 +404,7 @@ namespace NonStandard.Data.Parse {
 				string[] names = Array.ConvertAll(fields, f => f.Name);
 				int index = Parser.FindIndexWithWildcard(names, name, false);
 				if (index >= 0) {
+					//Show.Log(name+" "+scopeType+" :"+index + " " + names.Join(", ") + " " +fields.Join(", "));
 					value = fields[index].GetValue(scope);
 					type = (value != null) ? value.GetType() : null;
 					return;

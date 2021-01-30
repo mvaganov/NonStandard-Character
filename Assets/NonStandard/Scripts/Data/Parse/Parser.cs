@@ -213,7 +213,8 @@ namespace NonStandard.Data.Parse {
 			if (dictionaryAdd != null) { return true; } // dictionary has no field to find
 			string memberName = memberId as string;
 			if(!reflectTable.TryGetMemberDetails(memberName, out memberType, out field, out prop)) {
-				AddError("could not find \"" + memberName + "\" in " + result.GetType() + ". eg: " + reflectTable);
+				AddError("could not find \"" + memberName + "\" in " + result.GetType() + 
+					". possbile valid values: " + reflectTable);
 				return false;
 			}
 			return true;
@@ -247,6 +248,7 @@ namespace NonStandard.Data.Parse {
 				}
 			} else {
 				if (field != null) {
+					//Show.Log("setting " + result + "." + field.Name + " = " + memberValue);
 					field.SetValue(result, memberValue);
 				} else if (prop != null) {
 					prop.SetValue(result, memberValue, null);
@@ -274,9 +276,11 @@ namespace NonStandard.Data.Parse {
 					if (memberType == typeof(Expression)) {
 						memberValue = new Expression(parseNext);
 					} else {
-						if (CodeConvert.IsConvertable(memberType) && !subContextUsingSameList) {
+						if (CodeConvert.IsConvertable(memberType)) {
+							//Show.Log(memberId + " :: " + memberValue);
 							memberValue = context.Resolve(tok, scope);
 						} else {
+							//Show.Log(memberId+" : "+memberValue);
 							if (!CodeConvert.TryParse(memberType, parseNext, ref memberValue, scope, tok)) { return false; }
 						}
 					}
@@ -323,7 +327,10 @@ namespace NonStandard.Data.Parse {
 			if (startsW) { n = n.Substring(0, n.Length - 1); }
 			int index = sorted ? Array.BinarySearch(names, n) : (startsW)
 				? Array.FindIndex(names, s => s.StartsWith(n)) : Array.IndexOf(names, n);
-			if (startsW && index < 0) { return ~index; }
+			if (startsW && index < 0) {
+				index = ~index;
+				return (index < names.Length && names[index].StartsWith(n)) ? index : -1;
+			}
 			return index;
 		}
 		public static bool IsWildcardMatch(string possibility, string n, char wildcard = Wildcard) {

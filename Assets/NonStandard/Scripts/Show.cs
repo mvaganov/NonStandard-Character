@@ -13,7 +13,7 @@ namespace NonStandard {
 		public static Action<string> onError;
 		public static Action<string> onWarning;
 
-		public static void Log(object obj) { onLog.Invoke(obj.ToString()); }
+		public static void Log(object obj) { onLog.Invoke(obj != null ? obj.ToString() : ""); }
 		public static void Log(string str) { onLog.Invoke(str); }
 		public static void Error(object obj) { onError.Invoke(obj.ToString()); }
 		public static void Error(string str) { onError.Invoke(str); }

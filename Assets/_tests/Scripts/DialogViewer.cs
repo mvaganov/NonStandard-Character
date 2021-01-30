@@ -12,7 +12,7 @@ using NonStandard.Data.Parse;
 	public abstract class DialogOption {
 		public string text;
 		public TextAnchor anchorText = TextAnchor.UpperLeft;
-		public Expression If; // conditional requirement for this option
+		public Expression required; // conditional requirement for this option
 	}
 	[Serializable] public class Text : DialogOption { }
 	[Serializable] public class Choice : DialogOption { public string command; }
@@ -86,9 +86,13 @@ public class DialogViewer : MonoBehaviour {
 		if (initialized) { return; } else { initialized = true; }
 		InitializeCommands();
 		InitializeListUi();
-		List<ParseError> errors = new List<ParseError>();
-		CodeConvert.TryParse(dialogAsset.text, out dialogs, errors);
+		Tokenizer tokenizer = new Tokenizer();
+		CodeConvert.TryParse(dialogAsset.text, out dialogs, null, tokenizer);
 		errors.ForEach(e => Debug.LogError(e));
+		if (tokenizer.errors != null && tokenizer.errors.Count > 0) {
+			Debug.LogError(tokenizer.errors.Join("\n"));
+		}
+		//Debug.Log(tokenizer.DebugPrint());
 		//Debug.Log(NonStandard.Show.Stringify(dialogs, true));
 		if (dialogs == null) { dialogs = new List<Dialog>(); }
 		if (dialogs.Count > 0) { SetDialog(dialogs[0], UiPolicy.StartOver); }
