@@ -121,7 +121,9 @@ namespace NonStandard
 		public List<ScheduledTask> queueRealtime = new List<ScheduledTask>();
 		/// While this is zero, use system time. As soon as time becomes perturbed, by pause or time scale, this now keeps track of game-time. To reset time back to realtime, use SynchToRealtime()
 		private long alternativeTicks = 0;
+#if UNITY_2017_1_OR_NEWER
 		private long realtimeOffset;
+#endif
 		/// [Tooltip("stop advancing time & executing the queue?")]
 		public bool IsPaused = false;
 		private bool pausedLastFrame = false;

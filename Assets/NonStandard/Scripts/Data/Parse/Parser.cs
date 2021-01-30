@@ -21,7 +21,7 @@ namespace NonStandard.Data.Parse {
 		public class ParseState {
 			public int tokenIndex = 0;
 			public List<Token> tokens;
-			public Token GetToken() { return tokens[tokenIndex]; }
+			public Token Token { get { return tokens[tokenIndex]; } }
 		}
 		protected List<ParseState> state = new List<ParseState>();
 		protected Tokenizer tok;
@@ -59,7 +59,7 @@ namespace NonStandard.Data.Parse {
 			Context.Entry e = incrementAtLeastOnce ? Context.Entry.None : null;
 			do {
 				if (e != null && !Increment()) return false;
-				e = Current.GetToken().GetAsContextEntry();
+				e = Current.Token.GetAsContextEntry();
 			} while (e != null && e.IsComment());
 			return true;
 		}
@@ -114,7 +114,7 @@ namespace NonStandard.Data.Parse {
 		protected Type FindInternalType() {
 			if (Current.tokenIndex >= Current.tokens.Count) return null;
 			if (!SkipComments()) { AddError("failed skipping comment for initial type"); return null; }
-			Token token = Current.GetToken();
+			Token token = Current.Token;
 			Delim d = token.GetAsDelimiter();
 			if (d != null) {
 				if (d.text == "=" || d.text == ":") {
@@ -136,7 +136,7 @@ namespace NonStandard.Data.Parse {
 		}
 
 		public bool TryParse() {
-			Token token = Current.GetToken();
+			Token token = Current.Token;
 			Context.Entry e = token.GetAsContextEntry();
 			if(e != null && e.tokens == Current.tokens) { Increment(); } // skip past the opening bracket
 			FindInternalType(); // first, check if this has a more correct internal type defined
@@ -146,7 +146,7 @@ namespace NonStandard.Data.Parse {
 			}
 			if (!SkipComments()) { return true; }
 			while (state.Count > 0 && Current.tokenIndex < Current.tokens.Count) {
-				token = Current.GetToken();
+				token = Current.Token;
 				e = token.GetAsContextEntry();
 				if(e != null && e.tokens == Current.tokens) {
 					if (!token.IsContextEnding()) { AddError("unexpected state. we should never see this. ever."); }
@@ -182,7 +182,7 @@ namespace NonStandard.Data.Parse {
 			}
 		}
 		protected bool GetMemberNameAndAssociatedType() {
-			memberToken = Current.GetToken();
+			memberToken = Current.Token;
 			if (SkipStructuredDelimiters(memberToken.GetAsDelimiter())) { memberToken.Invalidate(); return true; }
 			memberId = null;
 			Context.Entry e = memberToken.GetAsContextEntry();
@@ -255,12 +255,13 @@ namespace NonStandard.Data.Parse {
 				} else {
 					throw new Exception("huh? how did we get here?");
 				}
-				field = null; prop = null; memberType = dictionaryTypes.Value; memberToken.Invalidate();
+				field = null; prop = null; memberType = dictionaryTypes.Value;
 			}
+			memberToken.Invalidate();
 		}
 		protected bool TryGetValue() {
 			memberValue = null;
-			Token token = Current.GetToken();
+			Token token = Current.Token;
 			object meta = token.meta;
 			if(SkipStructuredDelimiters(meta as Delim)) { return true; }
 			Context.Entry context = meta as Context.Entry;
@@ -281,7 +282,7 @@ namespace NonStandard.Data.Parse {
 							memberValue = context.Resolve(tok, scope);
 						} else {
 							//Show.Log(memberId+" : "+memberValue);
-							if (!CodeConvert.TryParse(memberType, parseNext, ref memberValue, scope, tok)) { return false; }
+							if (!CodeConvert.TryParseTokens(memberType, parseNext, ref memberValue, scope, tok)) { return false; }
 						}
 					}
 				}
@@ -312,7 +313,7 @@ namespace NonStandard.Data.Parse {
 			return false;
 		}
 
-		protected void AddError(string message) { tok.AddError(Current.GetToken(), message); }
+		protected void AddError(string message) { tok.AddError(Current.Token, message); }
 
 		/// <param name="names"></param>
 		/// <param name="n">name to find. the needle in the names haystack</param>

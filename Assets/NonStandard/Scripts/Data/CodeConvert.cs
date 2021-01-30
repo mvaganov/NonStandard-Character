@@ -7,24 +7,24 @@ namespace NonStandard.Data {
 	public class CodeConvert {
 		public static bool TryFill<T>(string text, ref T data, object scope, Tokenizer tokenizer = null) {
 			object value = data;
-			bool result = TryParse(typeof(T), text, ref value, tokenizer);
+			bool result = TryParseType(typeof(T), text, ref value, tokenizer);
 			data = (T)value;
 			return result;
 		}
 		public static bool TryParse<T>(string text, out T data, object scope, Tokenizer tokenizer = null) {
 			object value = null;
-			bool result = TryParse(typeof(T), text, ref value, scope, tokenizer);
+			bool result = TryParseType(typeof(T), text, ref value, scope, tokenizer);
 			data = (T)value;
 			return result;
 		}
-		public static bool TryParse(Type type, string text, ref object data, object scope, Tokenizer tokenizer = null) {
+		public static bool TryParseType(Type type, string text, ref object data, object scope, Tokenizer tokenizer = null) {
 			if(tokenizer == null) { tokenizer = new Tokenizer(); }
 			tokenizer.Tokenize(text);
 			//Show.Log(Show.GetStack(4));
 			//Show.Log(tokenizer.DebugPrint(-1));
-			return TryParse(type, tokenizer.tokens, ref data, scope, tokenizer);
+			return TryParseTokens(type, tokenizer.tokens, ref data, scope, tokenizer);
 		}
-		public static bool TryParse(Type type, List<Token> tokens, ref object data, object scope, Tokenizer tokenizer) {
+		public static bool TryParseTokens(Type type, List<Token> tokens, ref object data, object scope, Tokenizer tokenizer) {
 			Parser p = new Parser();
 			p.Init(type, tokens, data, tokenizer, scope);
 			bool result = p.TryParse();
