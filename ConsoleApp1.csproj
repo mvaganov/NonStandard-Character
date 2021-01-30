@@ -33,6 +33,7 @@
     <None Remove="ConsoleApp1\bin\**" />
     <None Remove="Library\**" />
     <None Remove="Temp\**" />
+    <None Remove="**\*.meta" />
   </ItemGroup>
 
   <ItemGroup>
