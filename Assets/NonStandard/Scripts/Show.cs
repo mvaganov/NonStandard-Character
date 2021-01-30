@@ -70,8 +70,9 @@ namespace NonStandard {
 			bool showTypeHere = showType; // no need to print type if there isn't type ambiguity
 			if (showType) {
 				Type b = t.BaseType; // if the parent class is a base class, there isn't any ambiguity
-				if (b == typeof(ValueType) || b == typeof(System.Object) || b == typeof(Array)) 
-					{ showTypeHere = false; }
+				if (b == typeof(ValueType) || b == typeof(System.Object) || b == typeof(Array) || 
+					t.GetCustomAttributes(false).FindIndex(o=>o.GetType()==typeof(UnambiguousStringifyAttribute)) >= 0)
+				{ showTypeHere = false; }
 			}
 			string s = obj as string;
 			if (s != null || t.IsPrimitive || t.IsEnum) {
@@ -264,4 +265,6 @@ namespace NonStandard {
 			return sb.ToString();
 		}
 	}
+
+	public class UnambiguousStringifyAttribute : System.Attribute { }
 }

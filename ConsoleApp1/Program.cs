@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 
 namespace ConsoleApp1 {
-	[System.Serializable] public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
+	[System.Serializable]
+	[UnambiguousStringify]
+	public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
 	class Program {
 		static void Main(string[] args) {
 			string testData = "i-2 f3testing12\"3\"-2.9";

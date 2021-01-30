@@ -9,14 +9,14 @@ namespace NonStandard.Data.Parse {
 		/// used by wildcard searches, for member names and enums. dramatically reduces structural typing
 		public const char Wildcard = '¤';
 		/// current data being parsed
-		protected object memberValue = null;
+		protected object memberValue;
 		/// the object being parsed into, the final result
 		public object result { get; protected set; }
 		public object scope;
 		/// the type that the result needs to be
 		protected Type resultType;
 		/// the type that the next value needs to be
-		protected Type memberType = null;
+		protected Type memberType;
 		// parse state
 		public class ParseState {
 			public int tokenIndex = 0;
@@ -26,17 +26,17 @@ namespace NonStandard.Data.Parse {
 		protected List<ParseState> state = new List<ParseState>();
 		protected Tokenizer tok;
 		// for parsing a list
-		protected List<object> listData = null;
+		protected List<object> listData;
 		// for objects and dictionaries
 		protected object memberId;
 		protected Token memberToken;
 		// for parsing an object
 		protected MemberReflectionTable reflectTable = new MemberReflectionTable();
-		protected FieldInfo field = null;
-		protected PropertyInfo prop = null;
+		protected FieldInfo field;
+		protected PropertyInfo prop;
 		// for parsing a dictionary
 		protected KeyValuePair<Type, Type> dictionaryTypes;
-		protected MethodInfo dictionaryAdd = null;
+		protected MethodInfo dictionaryAdd;
 
 		protected ParseState Current { get { return state[state.Count - 1]; } }
 		protected void AddParseState(List<Token> tokenList, int index = 0) {
@@ -153,7 +153,7 @@ namespace NonStandard.Data.Parse {
 					break;
 				} // found the closing bracket!
 				if (listData == null) {
-					if (!memberToken.IsValid) {
+					if (memberId == null) {
 						if (!GetMemberNameAndAssociatedType()) { return false; }
 					} else {
 						if (!TryGetValue()) { return false; }
@@ -257,6 +257,7 @@ namespace NonStandard.Data.Parse {
 				}
 				field = null; prop = null; memberType = dictionaryTypes.Value;
 			}
+			memberId = null;
 			memberToken.Invalidate();
 		}
 		protected bool TryGetValue() {

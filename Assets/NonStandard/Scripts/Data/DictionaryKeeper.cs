@@ -4,7 +4,8 @@ using UnityEngine;
 
 namespace NonStandard.Data {
 
-	[System.Serializable] public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
+	[System.Serializable, UnambiguousStringify]
+	public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
 	public class DictionaryKeeper : MonoBehaviour {
 		protected SensitiveHashTable_stringfloat dict = new SensitiveHashTable_stringfloat();
 		public SensitiveHashTable_stringfloat Dictionary { get { return dict; } }
