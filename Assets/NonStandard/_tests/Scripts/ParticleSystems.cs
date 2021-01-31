@@ -1,11 +1,10 @@
 ﻿using NonStandard;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class ParticleSystems : MonoBehaviour {
-	public List<ParticleSystem> ps = new List<ParticleSystem>();
-	public ParticleSystem current;
+	protected List<ParticleSystem> ps = new List<ParticleSystem>();
+	protected ParticleSystem current;
 	void Start () {
 		ParticleSystem[] kids = GetComponentsInChildren<ParticleSystem>(true);
 		for(int i = 0; i <kids.Length; ++i) {
