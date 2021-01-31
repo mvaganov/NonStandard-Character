@@ -56,7 +56,8 @@ namespace NonStandard.Data {
 			AddTo("cha", 4);
 		}
 		public float NumValue(string fieldName) {
-			object val = dict[fieldName];
+			object val;
+			if(!dict.TryGetValue(fieldName, out val)) return 0;
 			CodeConvert.TryConvert(ref val, typeof(float));
 			return (float)val;
 		}

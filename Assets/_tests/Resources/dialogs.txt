@@ -28,5 +28,5 @@
 {n¤ moreinfo o¤[{=T¤ t¤"no more info. {0} {1}"%(xp,nu¤)}{=Ch¤ t¤ okthxbye c¤ done}
 {=Ch¤ t¤"please?"c¤"dialog welcome"}
 {=Co¤ c¤"++ counter"}
-{=Ch¤ r¤((2*(1+1))<=(nu¤*1))t¤ exit*3 c¤ exit}
+{=Ch¤ r¤ counter>=(2*(1+1)) t¤ exit*3 c¤ exit}
 ]}

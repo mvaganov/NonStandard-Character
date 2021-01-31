@@ -16,9 +16,7 @@ using NonStandard.Data.Parse;
 		public bool Available(Tokenizer tok, object scope){
 			if (required == null) return true;
 			bool available;
-			if(!required.TryResolve(out available, tok, scope)) {
-				return false;
-			}
+			if(!required.TryResolve(out available, tok, scope)) { return false; }
 			return available;
 		}
 	}
@@ -174,6 +172,7 @@ public class DialogViewer : MonoBehaviour {
 		commandListing["done"] = Done;
 		commandListing["hide"] = Hide;
 		commandListing["show"] = Show;
+		commandListing["++"] = Increment;
 		commandListing["exit"] = s=>PlatformAdjust.Exit();
 	}
 	public void SetDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.DisablePrev); }
@@ -182,4 +181,8 @@ public class DialogViewer : MonoBehaviour {
 	public void Done(string _) { DeactivateDialogChoices(); ShowCloseDialogButton(); }
 	public void Hide(string _) { gameObject.SetActive(false); }
 	public void Show(string _) { gameObject.SetActive(true); }
+	public void Increment(string name) {
+		if (scriptedVariableScope == null) { errors.Add("can't add 1 to \""+name+"\", missing variable scope"); return; }
+		scriptedVariableScope.AddTo(name, 1);
+	}
 }

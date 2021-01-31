@@ -20,7 +20,9 @@ namespace NonStandard.Data.Parse {
 
 		public bool TryResolve<T>(out T value, Tokenizer tok, object scope = null) {
 			List<object> results = new List<object>();
+			//Show.Log(Tokenizer.DebugPrint(tokens));
 			Context.Entry.ResolveTerms(tok, scope, tokens, 0, tokens.Count, results);
+			//Show.Log(results.Join("]["));
 			if(results == null || results.Count != 1) {
 				tok.AddError(-1, "missing results");
 				value = default(T); return false;

@@ -276,7 +276,7 @@ namespace NonStandard.Data.Parse {
 							? Current.tokens.GetRange(index, context.tokenCount)
 							: context.tokens;
 					if (memberType == typeof(Expression)) {
-						memberValue = new Expression(parseNext);
+						memberValue = new Expression(new List<Token>() { token });
 					} else {
 						if (CodeConvert.IsConvertable(memberType)) {
 							//Show.Log(memberId + " :: " + memberValue);
