@@ -10,24 +10,26 @@ namespace NonStandard.Data.Parse {
 			FilePositionOf(index, rows, out row, out col);
 			message = m; this.index = index;
 		}
-		public override string ToString() { return "@" + (row+1) + "," + col + "[" + index + "]: " + message; }
+		public override string ToString() {
+			return ((index >= 0)?("@" + (row + 1) + "," + col + "(" + index + "): "):"") + message;
+		}
 		public static ParseError None = default(ParseError);
 		public void OffsetBy(int index, IList<int> rows) {
 			int r, c; FilePositionOf(index, rows, out r, out c); row += r; col += c;
 		}
-		public static void FilePositionOf(Token token, IList<int> indexOfNewRow, out int row, out int col) {
-			FilePositionOf(token.index, indexOfNewRow, out row, out col);
+		public static void FilePositionOf(Token token, IList<int> indexOfRowEnd, out int row, out int col) {
+			FilePositionOf(token.index, indexOfRowEnd, out row, out col);
 		}
-		public static void FilePositionOf(int index, IList<int> indexOfNewRow, out int row, out int col) {
-			if(indexOfNewRow == null || indexOfNewRow.Count == 0) { row = 0; col = index; return; }
-			row = indexOfNewRow.BinarySearchIndexOf(index);
+		public static void FilePositionOf(int index, IList<int> indexOfRowEnd, out int row, out int col) {
+			if(indexOfRowEnd == null || indexOfRowEnd.Count == 0) { row = 0; col = index; return; }
+			row = indexOfRowEnd.BinarySearchIndexOf(index);
 			if (row < 0) { row = ~row; }
-			int rowStart = row > 0 ? indexOfNewRow[row - 1] : 0;
+			int rowStart = row > 0 ? indexOfRowEnd[row - 1] : 0;
 			col = index - rowStart;
 			if (row == 0) ++col;
 		}
-		public static string FilePositionOf(Token token, IList<int> indexOfNewRow) {
-			int row, col; FilePositionOf(token, indexOfNewRow, out row, out col);
+		public static string FilePositionOf(Token token, IList<int> indexOfRowEnd) {
+			int row, col; FilePositionOf(token, indexOfRowEnd, out row, out col);
 			return (row + 1) + "," + (col);
 		}
 	}

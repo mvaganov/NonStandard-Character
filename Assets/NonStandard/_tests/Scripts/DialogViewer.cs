@@ -30,8 +30,7 @@ public class DialogViewer : MonoBehaviour {
 	public List<Dialog> dialogs;
 	public ScrollRect scrollRect;
 	public DictionaryKeeper scriptedVariableScope;
-	public List<string> errors = new List<string>();
-	Dictionary<string, Action<string>> commandListing = new Dictionary<string, Action<string>>();
+	Dictionary<string, Action<Tokenizer>> commandListing = new Dictionary<string, Action<Tokenizer>>();
 
 	ListUi listUi;
 	ListItemUi prefab_buttonUi, prefab_textUi;
@@ -99,8 +98,7 @@ public class DialogViewer : MonoBehaviour {
 		InitializeListUi();
 		tokenizer = new Tokenizer();
 		CodeConvert.TryParse(dialogAsset.text, out dialogs, GetScriptScope(), tokenizer);
-		errors.ForEach(e => Debug.LogError(e));
-		if (tokenizer.errors != null && tokenizer.errors.Count > 0) {
+		if (tokenizer.errors.Count > 0) {
 			Debug.LogError(tokenizer.errors.Join("\n"));
 		}
 		//Debug.Log(tokenizer.DebugPrint());
@@ -126,6 +124,12 @@ public class DialogViewer : MonoBehaviour {
 		}
 	}
 	public enum UiPolicy { StartOver, DisablePrev, Continue }
+	public void SetDialog(string name, UiPolicy uiPolicy) {
+		if (!initialized) { Init(); }
+		Dialog dialog = dialogs.Find(d => d.name == name);
+		if (dialog == null) { tokenizer.AddError("missing dialog \"" + name + "\""); }
+		SetDialog(dialog, uiPolicy);
+	}
 	public void SetDialog(Dialog dialog, UiPolicy uiPolicy) {
 		if (!initialized) { Init(); }
 		bool isScrolledAllTheWayDown = !scrollRect.verticalScrollbar.gameObject.activeInHierarchy ||
@@ -135,7 +139,7 @@ public class DialogViewer : MonoBehaviour {
 		case UiPolicy.DisablePrev: DeactivateDialogChoices(); break;
 		case UiPolicy.Continue: break;
 		}
-		if (dialog == null) { errors.Add("missing dialog");  return; }
+		if (dialog == null) { tokenizer.AddError("missing dialog");  return; }
 		if (dialog.options != null) {
 			for (int i = 0; i < dialog.options.Length; ++i) {
 				Dialog.DialogOption opt = dialog.options[i];
@@ -147,22 +151,20 @@ public class DialogViewer : MonoBehaviour {
 	}
 	public void ParseCommand(string command) {
 		if (!initialized) { Init(); }
-		int endOfCommand = command.IndexOf(' ');
-		if(endOfCommand < 0) { endOfCommand = command.Length; }
-		string cmd = command.Substring(0, endOfCommand);
-		Action<string> commandToExecute;
+		tokenizer.Tokenize(command);
+		string cmd = tokenizer.GetResolvedToken(0, GetScriptScope()).ToString();
+		Action<Tokenizer> commandToExecute;
 		if (commandListing.TryGetValue(cmd, out commandToExecute)) {
-			string nextCommand = endOfCommand < command.Length ? command.Substring(endOfCommand + 1) : "";
-			commandToExecute.Invoke(nextCommand);
+			commandToExecute.Invoke(tokenizer);
 		} else {
-			errors.Add("unknown command \'" + cmd + "\'");
+			tokenizer.AddError("unknown command \'" + cmd + "\'");
 		}
-		if (errors.Count > 0) {
-			for (int i = 0; i < errors.Count; ++i) {
-				ListItemUi li = AddDialogOption(new Dialog.Text { text = errors[i] }, true);
+		if (tokenizer.errors.Count > 0) {
+			for (int i = 0; i < tokenizer.errors.Count; ++i) {
+				ListItemUi li = AddDialogOption(new Dialog.Text { text = tokenizer.errors[i].ToString() }, true);
 				li.text.color = Color.red;
 			}
-			errors.Clear();
+			tokenizer.errors.Clear();
 		}
 	}
 	private void InitializeCommands() {
@@ -175,14 +177,24 @@ public class DialogViewer : MonoBehaviour {
 		commandListing["++"] = Increment;
 		commandListing["exit"] = s=>PlatformAdjust.Exit();
 	}
-	public void SetDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.DisablePrev); }
-	public void StartDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.StartOver); }
-	public void ContinueDialog(string name) { if (!initialized) { Init(); } SetDialog(dialogs.Find(d => d.name == name), UiPolicy.Continue); }
-	public void Done(string _) { DeactivateDialogChoices(); ShowCloseDialogButton(); }
-	public void Hide(string _) { gameObject.SetActive(false); }
-	public void Show(string _) { gameObject.SetActive(true); }
+	public void SetDialog(string name) { SetDialog(name, UiPolicy.DisablePrev); }
+	public void SetDialog(Tokenizer tok) { SetDialog(tok.GetStr(1)); }
+	public void StartDialog(string name) { SetDialog(name, UiPolicy.StartOver); }
+	public void StartDialog(Tokenizer tok) { StartDialog(tok.GetStr(1)); }
+	public void ContinueDialog(string name) { SetDialog(name, UiPolicy.Continue); }
+	public void ContinueDialog(Tokenizer tok) { ContinueDialog(tok.GetStr(1)); }
+	public void Done() { DeactivateDialogChoices(); ShowCloseDialogButton(); }
+	public void Done(Tokenizer tok) { Done(); }
+	public void Hide() { gameObject.SetActive(false); }
+	public void Hide(Tokenizer tok) { Hide(); }
+	public void Show() { gameObject.SetActive(true); }
+	public void Show(Tokenizer tok) { Show(); }
 	public void Increment(string name) {
-		if (scriptedVariableScope == null) { errors.Add("can't add 1 to \""+name+"\", missing variable scope"); return; }
+		if (scriptedVariableScope == null) {
+			tokenizer.AddError("can't add 1 to \"" + name + "\", missing variable scope");
+			return;
+		}
 		scriptedVariableScope.AddTo(name, 1);
 	}
+	public void Increment(Tokenizer tok) { Increment(tok.GetStr(1)); }
 }

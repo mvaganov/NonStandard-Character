@@ -4,10 +4,33 @@ using System.Text;
 
 namespace NonStandard.Data.Parse {
 	public class Tokenizer {
-		public string str;
-		public List<Token> tokens = new List<Token>(); // actually a tree. each token can point to more token lists
+		internal string str;
+		internal List<Token> tokens = new List<Token>(); // actually a tree. each token can point to more token lists
 		public List<ParseError> errors = new List<ParseError>();
-		public List<int> rows = new List<int>();
+		/// <summary>
+		/// the indexes of where rows end (newline characters), in order.
+		/// </summary>
+		internal List<int> rows = new List<int>();
+		public int Count { get { return tokens.Count; } }
+		/// <param name="i"></param>
+		/// <returns>raw token data</returns>
+		public Token GetToken(int i) { return tokens[i]; }
+		/// <summary>
+		/// the method you're looking for if the tokens are doing something fancy, like resolving to objects
+		/// </summary>
+		/// <param name="i"></param>
+		/// <param name="scope"></param>
+		/// <returns></returns>
+		public object GetResolvedToken(int i, object scope = null) { return GetToken(i).Resolve(this, scope); }
+		/// <summary>
+		/// this is probably the method you're looking for
+		/// </summary>
+		/// <param name="i"></param>
+		/// <param name="scope"></param>
+		/// <returns></returns>
+		public string GetStr(int i, object scope = null) {
+			object o = GetResolvedToken(i, scope);
+			return o != null ? o.ToString() : null; }
 		public Tokenizer() { }
 		public void FilePositionOf(Token token, out int row, out int col) {
 			ParseError.FilePositionOf(token, rows, out row, out col);
@@ -22,6 +45,7 @@ namespace NonStandard.Data.Parse {
 			}
 			return ParseError.FilePositionOf(token, rows);
 		}
+		public ParseError AddError(string message) { return AddError(-1, message); }
 		public ParseError AddError(int index, string message) {
 			ParseError e = new ParseError(index, rows, message); errors.Add(e); return e;
 		}
@@ -30,6 +54,9 @@ namespace NonStandard.Data.Parse {
 		public override string ToString() { return errors.Join(", "); }
 		public void Tokenize(string str, Context context = null) {
 			this.str = str;
+			errors.Clear();
+			tokens.Clear();
+			rows.Clear();
 			Tokenize(context, 0);
 		}
 		public string DebugPrint(int depth = 0, string indent = "  ") { return DebugPrint(tokens, depth, indent); }
@@ -59,7 +86,7 @@ namespace NonStandard.Data.Parse {
 			}
 			return sb.ToString();
 		}
-		public void Tokenize(Context a_context = null, int index = 0) {
+		protected void Tokenize(Context a_context = null, int index = 0) {
 			List<Context.Entry> contextStack = new List<Context.Entry>();
 			if (a_context == null) a_context = CodeRules.Default;
 			else { contextStack.Add(a_context.GetEntry(tokens, -1, null)); }
@@ -152,7 +179,7 @@ namespace NonStandard.Data.Parse {
 			}
 		}
 
-		public void ApplyOperators() {
+		protected void ApplyOperators() {
 			List<int[]> paths = FindTokenPaths(t => t.meta is DelimOp);
 			paths.Sort((a, b) => {
 				int comp;
@@ -178,7 +205,7 @@ namespace NonStandard.Data.Parse {
 				}
 			}
 		}
-		public string PrintTokenPaths(IList<int[]> paths) {
+		protected string PrintTokenPaths(IList<int[]> paths) {
 			return paths.Join("\n", arr => {
 				Context.Entry e = null;
 				Token t = GetTokenAt(tokens, arr, ref e);
@@ -233,7 +260,7 @@ namespace NonStandard.Data.Parse {
 			}
 			return paths;
 		}
-		public void ExtractContextAsSubTokenList(Context.Entry entry) {
+		internal void ExtractContextAsSubTokenList(Context.Entry entry) {
 			if(entry.tokenCount <= 0) { throw new Exception("what just happened?"); }
 			int indexWhereItHappens = entry.tokenStart;
 			List<Token> subTokens = entry.tokens.GetRange(entry.tokenStart, entry.tokenCount);
