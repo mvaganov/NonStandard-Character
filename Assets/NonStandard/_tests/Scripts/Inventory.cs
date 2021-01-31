@@ -1,12 +1,20 @@
-﻿using System.Collections.Generic;
+﻿using NonStandard;
+using System.Collections.Generic;
 using UnityEngine;
 
 public class Inventory : MonoBehaviour {
 
 	public List<GameObject> items;
 	public ListUi inventoryUi;
+	private static ParticleSystem pickupParticle;
 
 	public ListItemUi AddItem(GameObject itemObject) {
+		if (pickupParticle == null) { pickupParticle = Global.Get<ParticleSystems>().Get("circdir"); }
+		if (pickupParticle != null) {
+			pickupParticle.transform.position = itemObject.transform.position;
+			pickupParticle.transform.LookAt(transform);
+			pickupParticle.Emit(10);
+		}
 		items.Add(itemObject);
 		itemObject.SetActive(false);
 		itemObject.transform.SetParent(transform);
