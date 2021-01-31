@@ -380,11 +380,13 @@ namespace NonStandard.Data.Parse {
 			Type scopeType = scope.GetType();
 			KeyValuePair<Type, Type> dType = scopeType.GetIDictionaryType();
 			if(dType.Key != null) {
-				IDictionary dict = scope as IDictionary;
 				if (dType.Key == typeof(string) && 
 					(name[0]==(Parser.Wildcard) || name[name.Length-1]==(Parser.Wildcard))) {
 					MethodInfo getKey = null;
-					foreach(var kvp in dict) {
+					IEnumerator en = (IEnumerator)scopeType.GetMethod("GetEnumerator", Type.EmptyTypes).Invoke(scope,new object[] { });
+					//foreach(var kvp in dict) {
+					while(en.MoveNext()) {
+						object kvp = en.Current;
 						if (getKey == null) {
 							getKey = kvp.GetType().GetProperty("Key").GetGetMethod();
 						}
@@ -395,7 +397,19 @@ namespace NonStandard.Data.Parse {
 						}
 					}
 				}
-				if (dict.Contains(name)) { value = dict[name]; }
+				// how to generically interface with standard Dictionary objects
+				IDictionary dict = scope as IDictionary;
+				if (dict != null) {
+					if (dict.Contains(name)) { value = dict[name]; }
+				} else {
+					// how to generically interface with a non standard dictionary
+					MethodInfo mi = scopeType.GetMethod("ContainsKey", new Type[] { dType.Key });
+					bool hasIt = (bool)mi.Invoke(scope, new object[]{ name });
+					if (hasIt) {
+						mi = scopeType.GetMethod("Get", new Type[] { dType.Key });
+						value = mi.Invoke(scope, new object[] { name });
+					}
+				}
 				type = (value != null) ? value.GetType() : null;
 				return;
 			}

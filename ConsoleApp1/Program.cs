@@ -7,10 +7,10 @@ using System.Collections.Generic;
 namespace ConsoleApp1 {
 	[System.Serializable]
 	[UnambiguousStringify]
-	public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
+	public class SensitiveHashTable_stringfloat : BurlyHashTable<string, object> { }
 	class Program {
 		static void Main(string[] args) {
-			string testData = "i-2 f3testing12\"3\"-2.9";
+			string testData = "name\"the player\"i-2 f3testing12\"3\"2.99";
 			SensitiveHashTable_stringfloat dict;
 			Tokenizer tok = new Tokenizer();
 			CodeConvert.TryParse(testData, out dict, null, tok);

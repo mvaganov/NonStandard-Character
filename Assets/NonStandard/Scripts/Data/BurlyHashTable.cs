@@ -10,13 +10,15 @@ namespace NonStandard.Data {
 	/// </summary>
 	/// <typeparam name="KEY"></typeparam>
 	/// <typeparam name="VAL"></typeparam>
-	[Serializable] public class SensitiveHashTable<KEY, VAL> : IDictionary<KEY, VAL> 
-	where VAL : IEquatable<VAL> where KEY : IComparable<KEY> {
+	[Serializable] public class BurlyHashTable<KEY, VAL> : IDictionary<KEY, VAL> 
+	//where VAL : IEquatable<VAL>
+	where KEY : IComparable<KEY> {
 		public Func<KEY, int> hFunc = null;
 		public List<List<KV>> buckets;
 		public const int defaultBuckets = 8;
 		public List<KV> orderedPairs = new List<KV>();
 		public Action<KEY, VAL, VAL> onChange;
+		// TODO prototype fallback dictionary
 		public enum ResultOfAssigningToFunction { ThrowException, Ignore, OverwriteFunction }
 		public ResultOfAssigningToFunction onAssignmentToFunction = ResultOfAssigningToFunction.ThrowException;
 		public void FunctionAssignIgnore() { onAssignmentToFunction = ResultOfAssigningToFunction.Ignore; }
@@ -27,7 +29,7 @@ namespace NonStandard.Data {
 			public int hash;
 			public readonly KEY _key;
 			public VAL _val;
-			public SensitiveHashTable<KEY, VAL> parent;
+			public BurlyHashTable<KEY, VAL> parent;
 			public Action<VAL, VAL> onChange;
 
 			public List<KV> dependents, reliesOn; // calculate which fields rely on this one
@@ -90,15 +92,15 @@ namespace NonStandard.Data {
 				}
 			}
 			private void SetInternal(VAL value) {
-				if (!_val.Equals(value)) {
+				if ((_val == null && value != null) || (_val != null && !_val.Equals(value))) {
 					if (dependents != null) dependents.ForEach(dep => dep.needsRecalculation = true);
 					if (onChange != null) onChange.Invoke(_val, value);
 					if (parent.onChange != null) parent.onChange.Invoke(_key, _val, value);
 					_val = value;
 				}
 			}
-			public KV(int hash, KEY k, SensitiveHashTable<KEY, VAL> p) : this(hash, k, default(VAL), p) { }
-			public KV(int h, KEY k, VAL v, SensitiveHashTable<KEY, VAL> p) { parent = p; _key = k; _val = v; hash = h; }
+			public KV(int hash, KEY k, BurlyHashTable<KEY, VAL> p) : this(hash, k, default(VAL), p) { }
+			public KV(int h, KEY k, VAL v, BurlyHashTable<KEY, VAL> p) { parent = p; _key = k; _val = v; hash = h; }
 			public override string ToString() { return key + "(" + hash + "):" + val; }
 			public string ToString(bool showDependencies, bool showDependents) {
 				StringBuilder sb = new StringBuilder();
@@ -129,9 +131,9 @@ namespace NonStandard.Data {
 		}
 		private KV Kv(KEY key) { return new KV(Hash(key), key, this); }
 		private KV Kv(KEY key, VAL val) { return new KV(Hash(key), key, val, this); }
-		public SensitiveHashTable(Func<KEY, int> hashFunc, int bCount = defaultBuckets) { hFunc = hashFunc; BucketCount = bCount; }
-		public SensitiveHashTable() { }
-		public SensitiveHashTable(int bucketCount) { BucketCount = bucketCount; }
+		public BurlyHashTable(Func<KEY, int> hashFunc, int bCount = defaultBuckets) { hFunc = hashFunc; BucketCount = bCount; }
+		public BurlyHashTable() { }
+		public BurlyHashTable(int bucketCount) { BucketCount = bucketCount; }
 		public int Count {
 			get {
 				int sum = 0;
@@ -291,9 +293,9 @@ namespace NonStandard.Data {
 		public IEnumerator<KeyValuePair<KEY, VAL>> GetEnumerator() { return new Enumerator(this); }
 		IEnumerator IEnumerable.GetEnumerator() { return new Enumerator(this); }
 		public class Enumerator : IEnumerator<KeyValuePair<KEY, VAL>> {
-			SensitiveHashTable<KEY, VAL> htable;
+			BurlyHashTable<KEY, VAL> htable;
 			int index = -1; // MoveNext() is always called before the enumeration begins
-			public Enumerator(SensitiveHashTable<KEY, VAL> htable) { this.htable = htable; }
+			public Enumerator(BurlyHashTable<KEY, VAL> htable) { this.htable = htable; }
 			public KeyValuePair<KEY, VAL> Current { get { return htable.orderedPairs[index]; } }
 			object IEnumerator.Current { get { return Current; } }
 			public void Dispose() { htable = null; }

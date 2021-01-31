@@ -304,7 +304,7 @@ namespace NonStandard.Data.Parse {
 			TokenSubstitution sub = meta as TokenSubstitution;
 			if (sub != null) {
 				memberValue = sub.value;
-				if (!CodeConvert.TryConvert(ref memberValue, memberType)) {
+				if (!memberType.IsAssignableFrom(memberValue.GetType()) && !CodeConvert.TryConvert(ref memberValue, memberType)) {
 					AddError("unable to convert substitution (" + memberValue + ") to type '" + memberType + "'");
 					return false;
 				}

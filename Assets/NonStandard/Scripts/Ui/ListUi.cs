@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NonStandard.Data;
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -30,13 +31,13 @@ public class ListUi : MonoBehaviour {
 
 	public void ClearItems() { RemoveItem(null); }
 
-	public ListItemUi AddItem(object item, string name, Action onButton, ListItemUi prefab = null) {
+	public ListItemUi AddItem(object item, string text, Action onButton, ListItemUi prefab = null) {
 		if(prefab == null) { prefab = prefab_item; }
 		GameObject newItem = Instantiate(prefab.gameObject);
 		newItem.SetActive(true);
 		ListItemUi li = newItem.GetComponent<ListItemUi>();
-		li.name = name;
-		li.text.text = name;
+		li.name = text;
+		li.text.text = text;
 		li.item = item;
 		if (li.button != null && onButton != null) {
 			li.button.onClick.AddListener(onButton.Invoke);

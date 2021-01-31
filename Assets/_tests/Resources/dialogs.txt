@@ -5,7 +5,7 @@
 	options = [
 		{
 			="Dialog+Text"
-			text = "Welcome to the NonStandard game"
+			text = "Welcome {name}, to the NonStandard game"
 		}, {
 			="Dialog+Choice"
 			text = "Hi. See ya around."

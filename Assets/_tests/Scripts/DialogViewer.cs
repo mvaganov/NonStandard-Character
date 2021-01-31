@@ -13,6 +13,14 @@ using NonStandard.Data.Parse;
 		public string text;
 		public TextAnchor anchorText = TextAnchor.UpperLeft;
 		public Expression required; // conditional requirement for this option
+		public bool Available(Tokenizer tok, object scope){
+			if (required == null) return true;
+			bool available;
+			if(!required.TryResolve(out available, tok, scope)) {
+				return false;
+			}
+			return available;
+		}
 	}
 	[Serializable] public class Text : DialogOption { }
 	[Serializable] public class Choice : DialogOption { public string command; }
@@ -23,6 +31,7 @@ public class DialogViewer : MonoBehaviour {
 	public TextAsset dialogAsset;
 	public List<Dialog> dialogs;
 	public ScrollRect scrollRect;
+	public DictionaryKeeper scriptedVariableScope;
 	public List<string> errors = new List<string>();
 	Dictionary<string, Action<string>> commandListing = new Dictionary<string, Action<string>>();
 
@@ -32,6 +41,7 @@ public class DialogViewer : MonoBehaviour {
 	ListItemUi closeDialogButton;
 	bool initialized = false;
 	bool goingToScrollAllTheWayDown;
+	Tokenizer tokenizer;
 	public void InitializeListUi() {
 		listUi = GetComponentInChildren<ListUi>();
 		if(scrollRect == null) { scrollRect = GetComponentInChildren<ScrollRect>(); }
@@ -46,12 +56,12 @@ public class DialogViewer : MonoBehaviour {
 		do {
 			Dialog.Text t = option as Dialog.Text;
 			if (t != null) {
-				li = listUi.AddItem(option, t.text, null, prefab_textUi);
+				li = listUi.AddItem(option, scriptedVariableScope.Format(t.text), null, prefab_textUi);
 				break;
 			}
 			Dialog.Choice c = option as Dialog.Choice;
 			if (c != null) {
-				li = listUi.AddItem(option, c.text, () => ParseCommand(c.command), prefab_buttonUi);
+				li = listUi.AddItem(option, scriptedVariableScope.Format(c.text), () => ParseCommand(c.command), prefab_buttonUi);
 				currentChoices.Add(li);
 				break;
 			}
@@ -82,12 +92,15 @@ public class DialogViewer : MonoBehaviour {
 			text = "\n<close dialog>\n", command = "hide", anchorText = TextAnchor.MiddleCenter }, true);
 		currentChoices.Remove(closeDialogButton);
 	}
+	public object GetScriptScope() {
+		return scriptedVariableScope != null ? scriptedVariableScope.Dictionary : null;
+	}
 	void Init() {
 		if (initialized) { return; } else { initialized = true; }
 		InitializeCommands();
 		InitializeListUi();
-		Tokenizer tokenizer = new Tokenizer();
-		CodeConvert.TryParse(dialogAsset.text, out dialogs, null, tokenizer);
+		tokenizer = new Tokenizer();
+		CodeConvert.TryParse(dialogAsset.text, out dialogs, GetScriptScope(), tokenizer);
 		errors.ForEach(e => Debug.LogError(e));
 		if (tokenizer.errors != null && tokenizer.errors.Count > 0) {
 			Debug.LogError(tokenizer.errors.Join("\n"));
@@ -127,7 +140,10 @@ public class DialogViewer : MonoBehaviour {
 		if (dialog == null) { errors.Add("missing dialog");  return; }
 		if (dialog.options != null) {
 			for (int i = 0; i < dialog.options.Length; ++i) {
-				AddDialogOption(dialog.options[i], isScrolledAllTheWayDown);
+				Dialog.DialogOption opt = dialog.options[i];
+				if (opt.Available(tokenizer, GetScriptScope())) {
+					AddDialogOption(opt, isScrolledAllTheWayDown);
+				}
 			}
 		}
 	}

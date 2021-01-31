@@ -5,10 +5,10 @@ using UnityEngine;
 namespace NonStandard.Data {
 
 	[System.Serializable, UnambiguousStringify]
-	public class SensitiveHashTable_stringfloat : SensitiveHashTable<string, float> { }
+	public class SensitiveHashTable_stringobject : BurlyHashTable<string, object> { }
 	public class DictionaryKeeper : MonoBehaviour {
-		protected SensitiveHashTable_stringfloat dict = new SensitiveHashTable_stringfloat();
-		public SensitiveHashTable_stringfloat Dictionary { get { return dict; } }
+		protected SensitiveHashTable_stringobject dict = new SensitiveHashTable_stringobject();
+		public SensitiveHashTable_stringobject Dictionary { get { return dict; } }
 #if UNITY_EDITOR
 		[TextArea(3,10)]
 		public string values;
@@ -51,10 +51,29 @@ namespace NonStandard.Data {
 			}
 			for (int i = 0; i < mainStats.Length; ++i) {
 				string s = mainStats[i];
-				dict.Set("_"+s, ()=>CalcModifier(dict, s));
+				dict.Set("_"+s, ()=>CalcStatModifier(s));
 			}
-			dict["cha"] += 4;
+			AddTo("cha", 4);
 		}
-		private int CalcModifier(SensitiveHashTable<string, float> d, string s) { return (int)Mathf.Floor((d[s] - 10) / 2); }
+		public float NumValue(string fieldName) {
+			object val = dict[fieldName];
+			CodeConvert.TryConvert(ref val, typeof(float));
+			return (float)val;
+		}
+		public void AddTo(string fieldName, float bonus) {
+			dict[fieldName] = NumValue(fieldName) + bonus;
+		}
+		private int CalcStatModifier(string s) {
+			return (int)Mathf.Floor((NumValue(s) - 10) / 2);
+		}
+
+		public string Format(string text) {
+			Tokenizer tok=new Tokenizer();
+			string resolvedText = CodeConvert.Format(text, dict, tok);
+			if (tok.errors.Count > 0) {
+				Show.Error(tok.errors.Join(", "));
+			}
+			return resolvedText;
+		}
 	}
 }
