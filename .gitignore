@@ -59,6 +59,5 @@ sysinfo.txt
 crashlytics-build.properties
 
 !ConsoleApp1.csproj
-ConsoleApp1/bin
-ConsoleApp1/obj
+!ConsoleApp1.sln
 bin/

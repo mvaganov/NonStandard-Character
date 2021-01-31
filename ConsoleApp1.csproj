@@ -11,8 +11,7 @@
     <Compile Remove="Assets\NonStandard\Scripts\TouchGui\**" />
     <Compile Remove="Assets\NonStandard\Scripts\Ui\**" />
     <Compile Remove="Assets\NonStandard\Scripts\Utility\**" />
-    <Compile Remove="Assets\_tests\Scripts\**" />
-    <Compile Remove="ConsoleApp1\bin\**" />
+    <Compile Remove="Assets\NonStandard\_tests\Scripts\**" />
     <Compile Remove="Library\**" />
     <Compile Remove="Temp\**" />
     <EmbeddedResource Remove="Assets\NonStandard\Scripts\Character\**" />
@@ -20,8 +19,7 @@
     <EmbeddedResource Remove="Assets\NonStandard\Scripts\TouchGui\**" />
     <EmbeddedResource Remove="Assets\NonStandard\Scripts\Ui\**" />
     <EmbeddedResource Remove="Assets\NonStandard\Scripts\Utility\**" />
-    <EmbeddedResource Remove="Assets\_tests\Scripts\**" />
-    <EmbeddedResource Remove="ConsoleApp1\bin\**" />
+    <EmbeddedResource Remove="Assets\NonStandard\_tests\Scripts\**" />
     <EmbeddedResource Remove="Library\**" />
     <EmbeddedResource Remove="Temp\**" />
     <None Remove="Assets\NonStandard\Scripts\Character\**" />
@@ -29,8 +27,7 @@
     <None Remove="Assets\NonStandard\Scripts\TouchGui\**" />
     <None Remove="Assets\NonStandard\Scripts\Ui\**" />
     <None Remove="Assets\NonStandard\Scripts\Utility\**" />
-    <None Remove="Assets\_tests\Scripts\**" />
-    <None Remove="ConsoleApp1\bin\**" />
+    <None Remove="Assets\NonStandard\_tests\Scripts\**" />
     <None Remove="Library\**" />
     <None Remove="Temp\**" />
     <None Remove="**\*.meta" />
